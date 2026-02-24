@@ -1,0 +1,261 @@
+# Upstream Sync
+# This repository is a template consumer of jonathan-vella/azure-agentic-infraops.
+# Upstream ALWAYS wins for framework files. Consumer-owned files are listed in EXCLUDE_PATHS.
+#
+# ALWAYS synced from upstream (upstream wins):
+#   .devcontainer/          .vscode/               .github/agents/
+#   .github/skills/         .github/instructions/  .github/prompts/
+#   .github/data/           .github/copilot-instructions.md
+#   .github/CODEOWNERS      .github/ISSUE_TEMPLATE/ .github/PULL_REQUEST_TEMPLATE.md
+#   scripts/                mcp/azure-pricing-mcp/
+#     (except scripts/workflow-generator/ — see exclusions below)
+#   Root config: lefthook.yml  commitlint.config.js  pyproject.toml
+#     requirements.txt  .vale.ini  .vale/  .yamllint.yml
+#     .markdownlint-cli2.jsonc  .markdown-link-check.json  .gitattributes
+#
+# NEVER synced (consumer-owned, excluded):
+#   agent-output/           → user-generated project outputs
+#   infra/bicep/            → user project Bicep templates
+#   .github/workflows/      → repository CI/CD workflows
+#   docs/                   → consumer-facing documentation
+#   scripts/workflow-generator/ → consumer workflow tooling
+#   README.md               → consumer project README
+#   CHANGELOG.md            → consumer release history
+#   VERSION.md              → consumer version source of truth
+#   CONTRIBUTING.md         → consumer contribution guidelines
+#   CONTRIBUTORS.md         → consumer contributor credits
+#   package.json            → consumer package identity & version
+#
+# NOTE: New upstream lint scripts in package.json won't auto-arrive.
+# Review upstream diff manually during sync PR review.
+#
+# Runs weekly and on manual dispatch. Always opens a PR for human review — no auto-merge.
+
+name: Upstream Sync
+
+"on":
+  schedule:
+    # Run weekly on Sunday at 23:00 UTC
+    - cron: "0 23 * * 0"
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: "Run sync even if no changes are detected"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UPSTREAM_REPO: jonathan-vella/azure-agentic-infraops
+  UPSTREAM_REF: main
+  SYNC_BRANCH: automation/upstream-sync
+  # Only these paths are excluded — everything else syncs from upstream.
+  # Note: .git is never listed here — git checkout cannot overwrite it.
+  EXCLUDE_PATHS: |
+    .github/workflows/
+    agent-output/
+    infra/bicep/
+    node_modules/
+    docs/
+    scripts/workflow-generator/
+    README.md
+    CHANGELOG.md
+    VERSION.md
+    CONTRIBUTING.md
+    CONTRIBUTORS.md
+    package.json
+
+jobs:
+  sync:
+    name: Sync Upstream Content
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream branch
+        run: |
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_REF}" --prune
+
+      - name: Apply upstream changes (upstream always wins)
+        id: sync
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Strategy: create the sync branch, overwrite everything from upstream,
+          # restore our 3 exclusions from the base branch, commit, push.
+          # No merge = no conflicts. Upstream always wins unconditionally.
+
+          BASE_SHA=$(git rev-parse HEAD)
+
+          # Create (or reset) the sync branch from our current base
+          git checkout -B "${SYNC_BRANCH}"
+
+          # Take EVERYTHING from upstream into the working tree and index
+          git checkout "upstream/${UPSTREAM_REF}" -- .
+
+          # Restore only the excluded paths from the base branch.
+          # For directories: upstream may have added files we don't want,
+          # so we must wipe the path first, then restore our version.
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            # Safety: never touch .git internals
+            [[ "$path" == .git* ]] && continue
+
+            # Step A: Remove everything upstream put in this path
+            git rm -r --cached --ignore-unmatch -- "$path" > /dev/null 2>&1 || true
+            rm -rf -- "$path" 2>/dev/null || true
+
+            # Step B: Restore our base version (if the path existed in our repo)
+            if git ls-tree --name-only "${BASE_SHA}" -- "$path" | grep -q .; then
+              git checkout "${BASE_SHA}" -- "$path" 2>/dev/null || true
+            fi
+          done <<< "${EXCLUDE_PATHS}"
+
+          # Special-case excluded workflows directory:
+          # remove any upstream-added workflow files that don't exist in BASE_SHA.
+          if [ -d ".github/workflows" ]; then
+            while IFS= read -r wf; do
+              [ -z "$wf" ] && continue
+              if ! git cat-file -e "${BASE_SHA}:${wf}" 2>/dev/null; then
+                git rm --cached --ignore-unmatch -- "$wf" > /dev/null 2>&1 || true
+                rm -f -- "$wf" 2>/dev/null || true
+              fi
+            done < <(git diff --cached --name-only -- '.github/workflows/' || true)
+
+            git checkout "${BASE_SHA}" -- '.github/workflows/' 2>/dev/null || true
+          fi
+
+          # Detect whether anything changed relative to the base branch
+          changed=false
+          if ! git diff --quiet "${BASE_SHA}" -- || ! git diff --cached --quiet "${BASE_SHA}" --; then
+            changed=true
+          fi
+
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Log changed files
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          echo "Files changed in this sync:"
+          git diff --cached --name-only | head -100 | sed 's/^/  /'
+          echo "  (showing first 100; may be more)"
+
+      - name: Assert excluded paths are unchanged
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|agent-output/|infra/bicep/|docs/|scripts/workflow-generator/|README\.md|CHANGELOG\.md|VERSION\.md|CONTRIBUTING\.md|CONTRIBUTORS\.md|package\.json)' || true)
+          if [ -n "$leaked" ]; then
+            echo "::error::Excluded paths were modified by sync."
+            echo "$leaked" | sed 's/^/  /'
+            exit 1
+          fi
+
+      - name: Skip when no changes are present
+        if: steps.sync.outputs.changed != 'true' && github.event.inputs.force_sync != 'true'
+        run: echo "No upstream changes after applying exclusions. Skipping PR."
+
+      - name: Commit and push sync branch
+        if: steps.sync.outputs.changed == 'true' || github.event.inputs.force_sync == 'true'
+        run: |
+          git add -A
+
+          git commit -m "chore(sync): upstream sync from ${UPSTREAM_REPO}@${UPSTREAM_REF}
+
+          Synced at $(date -u +"%Y-%m-%d %H:%M UTC")
+          Excluded (consumer-owned): agent-output/ infra/bicep/ .github/workflows/
+            docs/ scripts/workflow-generator/ README.md CHANGELOG.md VERSION.md
+            CONTRIBUTING.md CONTRIBUTORS.md package.json" \
+            --allow-empty
+
+          set +e
+          push_output=$(git push --force origin "${SYNC_BRANCH}" 2>&1)
+          push_exit=$?
+          set -e
+
+          if [ "$push_exit" -ne 0 ]; then
+            echo "$push_output"
+            if echo "$push_output" | grep -q 'without `workflows` permission'; then
+              echo "::error::Push failed because workflow files changed and GITHUB_TOKEN cannot update workflows in this repo policy."
+              echo "::error::Use a PAT with workflow scope, or exclude .github/workflows/ from sync."
+            fi
+            exit "$push_exit"
+          fi
+
+      - name: Ensure PR labels exist
+        if: steps.sync.outputs.changed == 'true' || github.event.inputs.force_sync == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "automation" --color "0075ca" --description "Automated workflow changes" --repo "${{ github.repository }}" 2>/dev/null || true
+          gh label create "upstream-sync" --color "e4e669" --description "Upstream template sync" --repo "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Create or update pull request
+        if: steps.sync.outputs.changed == 'true' || github.event.inputs.force_sync == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPSTREAM_SHA=$(git rev-parse "upstream/${UPSTREAM_REF}" 2>/dev/null | cut -c1-7 || echo "unknown")
+
+          PR_BODY="Automated full sync from \`${UPSTREAM_REPO}@${UPSTREAM_REF}\` (\`${UPSTREAM_SHA}\`). **Upstream always wins for framework files.**
+
+          Triggered by: \`${{ github.event_name }}\`
+
+          **Always synced from upstream (framework files):**
+          \`.devcontainer/\` · \`.vscode/\` · \`.github/agents/\` · \`.github/skills/\` · \`.github/instructions/\`
+          \`.github/prompts/\` · \`.github/data/\` · \`.github/copilot-instructions.md\`
+          \`scripts/\` · \`mcp/azure-pricing-mcp/\` · root config files
+
+          **Excluded (consumer-owned, never overwritten):**
+          \`agent-output/\` · \`infra/bicep/\` · \`.github/workflows/\`
+          \`docs/\` · \`scripts/workflow-generator/\` · \`README.md\` · \`CHANGELOG.md\` · \`VERSION.md\`
+          \`CONTRIBUTING.md\` · \`CONTRIBUTORS.md\` · \`package.json\`
+
+          > **Review note**: New upstream lint scripts in \`package.json\`, docs improvements in \`docs/\`, and workflow tooling in \`scripts/workflow-generator/\` won't appear here — check upstream diff manually.
+          > Policy: always manual review, no auto-merge."
+
+          # Update existing open PR or create new one
+          EXISTING_PR=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "${SYNC_BRANCH}" \
+            --state open \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Updating existing PR #${EXISTING_PR}"
+            gh pr edit "$EXISTING_PR" \
+              --repo "${{ github.repository }}" \
+              --body "$PR_BODY"
+          else
+            echo "Creating new PR"
+            gh pr create \
+              --repo "${{ github.repository }}" \
+              --head "${SYNC_BRANCH}" \
+              --base "${{ github.ref_name }}" \
+              --title "chore(sync): upstream sync from ${UPSTREAM_REPO}" \
+              --body "$PR_BODY" \
+              --label "automation" \
+              --label "upstream-sync"
+          fi

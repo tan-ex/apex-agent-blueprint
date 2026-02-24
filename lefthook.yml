@@ -1,0 +1,194 @@
+# lefthook.yml - Git hooks configuration
+# Replaces Husky with a faster, dependency-free alternative
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: false
+  commands:
+    markdown-lint:
+      glob: "*.md"
+      run: |
+        # Get staged markdown files
+        STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$' || true)
+        if [ -n "$STAGED_MD" ]; then
+          COUNT=$(echo "$STAGED_MD" | wc -l | tr -d ' ')
+          echo "📝 Validating $COUNT markdown file(s)..."
+          # Lint staged files only, suppress verbose Finding: output
+          RESULT=$(echo "$STAGED_MD" | xargs markdownlint-cli2 --no-globs 2>&1)
+          # Show only Summary and errors, skip Finding/Linting lines
+          echo "$RESULT" | grep -v -E '^(Finding:|Linting:)' || true
+        else
+          echo "ℹ️  No markdown files to validate"
+        fi
+      stage_fixed: true
+
+    link-check:
+      glob: "docs/**/*.md"
+      run: |
+        # Get staged docs markdown files
+        STAGED_DOCS=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/.*\.md$' || true)
+        if [ -n "$STAGED_DOCS" ]; then
+          echo "🔗 Checking links in $(echo "$STAGED_DOCS" | wc -l | tr -d ' ') doc file(s)..."
+          # Use npx to run from local node_modules (avoids Node.js 24 global install bug)
+          echo "$STAGED_DOCS" | xargs -I {} npx markdown-link-check {} --config .markdown-link-check.json --quiet
+        else
+          echo "ℹ️  No docs to check links"
+        fi
+
+    h2-sync:
+      glob: "{.github/skills/azure-artifacts/SKILL.md,.github/instructions/azure-artifacts*,scripts/validate-artifact-templates*}"
+      run: |
+        STAGED_SYNC=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(SKILL\.md|azure-artifacts|validate-artifact-templates)' || true)
+        if [ -n "$STAGED_SYNC" ]; then
+          echo "🔄 Checking H2 heading sync across sources..."
+          npm run lint:h2-sync
+        else
+          echo "ℹ️  No H2-source files to sync-check"
+        fi
+      fail_text: |
+        ❌ H2 heading sync failed!
+
+        Sources must match: SKILL.md ↔ azure-artifacts ↔ validator
+        🔧 Run: npm run lint:h2-sync
+
+    artifact-validation:
+      glob: "{agent-output,.github/skills/azure-artifacts/templates}/**/*.md"
+      run: |
+        # Check if any agent-output artifacts are staged
+        STAGED_ARTIFACTS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^agent-output/.*\.md$' || true)
+        if [ -n "$STAGED_ARTIFACTS" ]; then
+          COUNT=$(echo "$STAGED_ARTIFACTS" | wc -l | tr -d ' ')
+          echo "📋 Validating $COUNT artifact(s) against templates..."
+          # Run full artifact validation - blocks on any H2 mismatch
+          if ! npm run lint:artifact-templates; then
+            echo ""
+            echo "❌ Artifact template validation failed!"
+            echo ""
+            echo "🔧 To fix:"
+            echo "   1. Check .github/instructions/azure-artifacts.instructions.md"
+            echo "   2. Use EXACT H2 headings from that file"
+            echo "   3. Run: npm run fix:artifact-h2 <file> --apply"
+            echo "   4. Re-stage and commit"
+            echo ""
+            exit 1
+          fi
+        else
+          echo "ℹ️  No agent-output artifacts to validate"
+        fi
+      fail_text: |
+        ❌ Artifact H2 structure validation failed!
+
+        📚 Reference: .github/instructions/azure-artifacts.instructions.md
+        🔧 Auto-fix: npm run fix:artifact-h2 <file> --apply
+
+    agent-frontmatter:
+      glob: "**/*.agent.md"
+      run: |
+        # Check if any agent files are staged
+        STAGED_AGENTS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.agent\.md$' || true)
+        if [ -n "$STAGED_AGENTS" ]; then
+          COUNT=$(echo "$STAGED_AGENTS" | wc -l | tr -d ' ')
+          echo "🤖 Validating $COUNT agent file(s)..."
+          npm run lint:agent-frontmatter
+        else
+          echo "ℹ️  No agent files to validate"
+        fi
+      fail_text: |
+        ❌ Agent frontmatter validation failed!
+
+        🔧 Check YAML syntax in agent definitions
+        📚 Reference: .github/instructions/agent-definitions.instructions.md
+
+    instruction-frontmatter:
+      glob: "**/*.instructions.md"
+      run: |
+        STAGED_INSTR=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.instructions\.md$' || true)
+        if [ -n "$STAGED_INSTR" ]; then
+          COUNT=$(echo "$STAGED_INSTR" | wc -l | tr -d ' ')
+          echo "📋 Validating $COUNT instruction file(s)..."
+          npm run lint:instruction-frontmatter
+        else
+          echo "ℹ️  No instruction files to validate"
+        fi
+      fail_text: |
+        ❌ Instruction frontmatter validation failed!
+
+        📚 Allowed fields: description, applyTo
+        🔧 Remove any non-standard fields from YAML frontmatter
+
+    instruction-refs:
+      glob: "{.github/agents/**,.github/skills/**,.github/instructions/**}"
+      run: |
+        STAGED_REFS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(agent|instructions)\.md$|SKILL\.md$' || true)
+        if [ -n "$STAGED_REFS" ]; then
+          echo "🔗 Validating instruction cross-references..."
+          npm run validate:instruction-refs
+        else
+          echo "ℹ️  No agent/skill/instruction files to check references"
+        fi
+      fail_text: |
+        ❌ Instruction reference validation failed!
+
+        🔧 A referenced instruction or skill file does not exist.
+        📚 Run: npm run validate:instruction-refs
+
+    python-lint:
+      glob: "mcp/**/*.py"
+      run: |
+        STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^mcp/.*\.py$' || true)
+        if [ -n "$STAGED_PY" ]; then
+          COUNT=$(echo "$STAGED_PY" | wc -l | tr -d ' ')
+          echo "🐍 Linting $COUNT Python file(s) with ruff..."
+          cd mcp/azure-pricing-mcp && python -m ruff check src/ tests/
+        else
+          echo "ℹ️  No Python files to lint"
+        fi
+      fail_text: |
+        ❌ Python lint failed!
+
+        🔧 Fix: cd mcp/azure-pricing-mcp && python -m ruff check --fix src/ tests/
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx --no -- commitlint --edit {1}
+      fail_text: |
+        ❌ Commit message validation failed!
+
+        📖 Conventional Commits format required:
+           <type>[optional scope]: <description>
+
+           Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
+           Examples:
+             feat: add new Azure App Service module
+             fix(bicep): correct storage account naming
+             docs: update README with deployment steps
+
+# Post-commit validation checks (enforced)
+post-commit:
+  commands:
+    version-sync:
+      run: |
+        echo "🔍 Checking version synchronization..."
+        node scripts/validate-version-sync.mjs
+      fail_text: "❌ Version sync check failed"
+
+    deprecated-refs:
+      glob: "*.md"
+      run: |
+        echo "🔍 Checking for deprecated references..."
+        node scripts/validate-no-deprecated-refs.mjs
+      fail_text: "❌ Deprecated references check failed"
+
+    json-syntax:
+      glob: "*.json"
+      run: |
+        echo "🔍 Validating JSON syntax..."
+        STAGED_JSON=$(git diff --cached --name-only --diff-filter=ACM | grep '\.json$' | grep -v node_modules | grep -v infra || true)
+        if [ -n "$STAGED_JSON" ]; then
+          for f in $STAGED_JSON; do
+            node -e "JSON.parse(require('fs').readFileSync('$f'))" 2>/dev/null && echo "  ✓ $f" || { echo "  ✗ $f - Invalid JSON"; exit 1; }
+          done
+        fi
+      fail_text: "❌ JSON syntax validation failed"
