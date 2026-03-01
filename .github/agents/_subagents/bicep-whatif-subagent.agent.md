@@ -1,7 +1,7 @@
 ---
 name: bicep-whatif-subagent
 description: Bicep deployment preview subagent. Runs az deployment group what-if to preview changes before deployment. Analyzes policy violations, resource changes, and cost impact. Returns structured summary for parent agent review.
-model: "GPT-5.3-Codex (copilot)"
+model: "Claude Sonnet 4.6 (copilot)"
 user-invokable: false
 disable-model-invocation: false
 agents: []
@@ -10,6 +10,8 @@ tools:
     execute,
     read,
     search,
+    web,
+    vscode/askQuestions,
     "azure-mcp/*",
     "bicep/*",
     ms-azuretools.vscode-azureresourcegroups/azureActivityLog,
