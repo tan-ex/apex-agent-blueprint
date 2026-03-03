@@ -27,7 +27,24 @@ code YOUR-REPO-NAME
 
 ---
 
-## Step 2: Open in Dev Container
+## Step 2: Rewrite template references
+
+Run the initializer script to replace references to the template repository with
+your own repository slug:
+
+```bash
+npm run init:template
+```
+
+Preview changes without writing files:
+
+```bash
+npm run init:template:dry-run
+```
+
+---
+
+## Step 3: Open in Dev Container
 
 1. Press `F1` (or `Ctrl+Shift+P`)
 2. Type: `Dev Containers: Reopen in Container`
@@ -42,7 +59,7 @@ The Dev Container installs all tools automatically:
 
 ---
 
-## Step 3: Verify Setup
+## Step 4: Verify Setup
 
 ```bash
 az --version && bicep --version && pwsh --version
@@ -50,7 +67,7 @@ az --version && bicep --version && pwsh --version
 
 ---
 
-## Step 4: Enable Subagent Orchestration
+## Step 5: Enable Subagent Orchestration
 
 > **⚠️ REQUIRED**: The Conductor pattern requires this setting.
 
@@ -73,7 +90,7 @@ take precedence for experimental features like subagent invocation.
 
 ---
 
-## Step 5: Start the Conductor
+## Step 6: Start the Conductor
 
 ### Option A: InfraOps Conductor (Recommended)
 
@@ -105,7 +122,7 @@ Invoke agents directly for specific tasks:
 
 ---
 
-## Step 6: Follow the Workflow
+## Step 7: Follow the Workflow
 
 The agents work in sequence with handoffs:
 

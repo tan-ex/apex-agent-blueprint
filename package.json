@@ -4,6 +4,8 @@
   "description": "Agentic InfraOps - Azure infrastructure engineered by agents. Verified. Well-Architected. Deployable.",
   "private": true,
   "scripts": {
+    "init:template": "node scripts/update-template-references.mjs",
+    "init:template:dry-run": "node scripts/update-template-references.mjs --dry-run",
     "prepare": "lefthook install",
     "lint:md": "markdownlint-cli2 '**/*.md' '#node_modules'",
     "lint:md:fix": "markdownlint-cli2 --fix '**/*.md' '#node_modules'",

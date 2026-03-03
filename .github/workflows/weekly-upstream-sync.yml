@@ -8,7 +8,7 @@
 #   .github/data/           .github/copilot-instructions.md
 #   .github/CODEOWNERS      .github/ISSUE_TEMPLATE/ .github/PULL_REQUEST_TEMPLATE.md
 #   scripts/                mcp/azure-pricing-mcp/
-#     (except scripts/workflow-generator/ — see exclusions below)
+#     (except scripts/update-template-references.mjs — see exclusions below)
 #   Root config: lefthook.yml  commitlint.config.js  pyproject.toml
 #     requirements.txt  .vale.ini  .vale/  .yamllint.yml
 #     .markdownlint-cli2.jsonc  .markdown-link-check.json  .gitattributes
@@ -18,7 +18,7 @@
 #   infra/bicep/            → user project Bicep templates
 #   .github/workflows/      → repository CI/CD workflows
 #   docs/                   → consumer-facing documentation
-#   scripts/workflow-generator/ → consumer workflow tooling
+#   scripts/update-template-references.mjs → template repo initializer script
 #   README.md               → consumer project README
 #   CHANGELOG.md            → consumer release history
 #   VERSION.md              → consumer version source of truth
@@ -65,7 +65,7 @@ env:
     infra/bicep/
     node_modules/
     docs/
-    scripts/workflow-generator/
+    scripts/update-template-references.mjs
     README.md
     CHANGELOG.md
     VERSION.md
@@ -165,7 +165,7 @@ jobs:
       - name: Assert excluded paths are unchanged
         if: steps.sync.outputs.changed == 'true'
         run: |
-          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|agent-output/|infra/bicep/|docs/|scripts/workflow-generator/|README\.md|CHANGELOG\.md|VERSION\.md|CONTRIBUTING\.md|CONTRIBUTORS\.md|package\.json)' || true)
+          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|agent-output/|infra/bicep/|docs/|scripts/update-template-references\.mjs|README\.md|CHANGELOG\.md|VERSION\.md|CONTRIBUTING\.md|CONTRIBUTORS\.md|package\.json)' || true)
           if [ -n "$leaked" ]; then
             echo "::error::Excluded paths were modified by sync."
             echo "$leaked" | sed 's/^/  /'
@@ -185,7 +185,7 @@ jobs:
 
           Synced at $(date -u +"%Y-%m-%d %H:%M UTC")
           Excluded (consumer-owned): agent-output/ infra/bicep/ .github/workflows/
-            docs/ scripts/workflow-generator/ README.md CHANGELOG.md VERSION.md
+            docs/ scripts/update-template-references.mjs README.md CHANGELOG.md VERSION.md
             CONTRIBUTING.md CONTRIBUTORS.md package.json" \
             --allow-empty
 
@@ -229,10 +229,10 @@ jobs:
 
           **Excluded (consumer-owned, never overwritten):**
           \`agent-output/\` · \`infra/bicep/\` · \`.github/workflows/\`
-          \`docs/\` · \`scripts/workflow-generator/\` · \`README.md\` · \`CHANGELOG.md\` · \`VERSION.md\`
+          \`docs/\` · \`scripts/update-template-references.mjs\` · \`README.md\` · \`CHANGELOG.md\` · \`VERSION.md\`
           \`CONTRIBUTING.md\` · \`CONTRIBUTORS.md\` · \`package.json\`
 
-          > **Review note**: New upstream lint scripts in \`package.json\`, docs improvements in \`docs/\`, and workflow tooling in \`scripts/workflow-generator/\` won't appear here — check upstream diff manually.
+          > **Review note**: New upstream lint scripts in \`package.json\` and docs improvements in \`docs/\` won't appear here — check upstream diff manually.
           > Policy: always manual review, no auto-merge."
 
           # Update existing open PR or create new one

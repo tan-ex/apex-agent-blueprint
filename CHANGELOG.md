@@ -8,3 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 <!-- Template consumers: start your changelog here -->
+
+### Added
+
+- Cross-platform template initialization script: `npm run init:template` to rewrite
+  template repository references to the consumer repository slug

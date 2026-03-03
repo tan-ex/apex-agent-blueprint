@@ -86,6 +86,18 @@ git clone https://github.com/YOUR-USERNAME/YOUR-REPO-NAME.git
 code YOUR-REPO-NAME
 ```
 
+Update all template repository references to your new repository:
+
+```bash
+npm run init:template
+```
+
+Optional preview mode:
+
+```bash
+npm run init:template:dry-run
+```
+
 ### Step 2: Open in Dev Container
 
 1. Press `F1` → **Dev Containers: Reopen in Container** _(first build: ~2-3 min)_
