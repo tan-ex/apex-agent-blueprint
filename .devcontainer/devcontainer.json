@@ -19,21 +19,27 @@
     },
     "ghcr.io/devcontainers/features/github-cli:1": {
       "version": "latest"
-    }
+    },
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "installTFsec": true
+    },
+    "ghcr.io/devcontainers/features/go:1": {}
   },
 
   // Lifecycle commands - chain apt operations to avoid lock conflicts
   "onCreateCommand": "set -e; sudo rm -f /etc/apt/sources.list.d/yarn.list 2>/dev/null; sudo apt-get update; sudo apt-get install -y graphviz dos2unix; ARCH=$(dpkg --print-architecture); if [ \"$ARCH\" = \"amd64\" ]; then curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg; echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | sudo tee /etc/apt/sources.list.d/k6.list; sudo apt-get update; sudo apt-get install -y k6; else echo \"Skipping k6 install on unsupported architecture: $ARCH\"; fi; curl -LsSf https://astral.sh/uv/install.sh | sh",
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "postStartCommand": {
-    "lefthook": "npx lefthook install 2>/dev/null || true"
+    "lefthook": "npx lefthook install 2>/dev/null || true",
+    "update-tools": "bash .devcontainer/post-start.sh"
   },
 
   // Environment variables for Python optimization
   "containerEnv": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHONUNBUFFERED": "1",
-    "UV_CACHE_DIR": "/home/vscode/.cache/uv"
+    "UV_CACHE_DIR": "/home/vscode/.cache/uv",
+    "TF_PLUGIN_CACHE_DIR": "/home/vscode/.terraform.d/plugin-cache"
   },
 
   "remoteEnv": {
@@ -64,7 +70,9 @@
         "esbenp.prettier-vscode",
         "mechatroner.rainbow-csv",
         "redhat.vscode-yaml",
-        "mutantdino.resourcemonitor"
+        "mutantdino.resourcemonitor",
+        "HashiCorp.terraform",
+        "ms-azuretools.vscode-azureterraform"
       ],
       "settings": {
         "chat.customAgentInSubagent.enabled": true,
@@ -93,12 +101,18 @@
         "[bicep]": {
           "editor.tabSize": 2
         },
+        "[terraform]": {
+          "editor.tabSize": 2,
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "hashicorp.terraform"
+        },
         "[powershell]": {
           "editor.tabSize": 4
         },
         "[python]": {
           "editor.tabSize": 4
         },
+        "python.defaultInterpreterPath": "/usr/local/python/current/bin/python3",
         "python.analysis.typeCheckingMode": "basic",
         "markdownlint.config": {
           "extends": "${workspaceFolder}/.markdownlint-cli2.jsonc"

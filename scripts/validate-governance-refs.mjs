@@ -48,8 +48,8 @@ function fileExists(filePath) {
 console.log("\n🔍 Governance Reference Validation\n");
 
 // 1. Bicep Code Generator references governance constraints
-console.log("📄 06-bicep-code-generator.agent.md");
-const codeGenPath = ".github/agents/06-bicep-code-generator.agent.md";
+console.log("📄 06b-bicep-codegen.agent.md");
+const codeGenPath = ".github/agents/06b-bicep-codegen.agent.md";
 check(
   "References 04-governance-constraints",
   fileContains(codeGenPath, "04-governance-constraints"),
@@ -99,15 +99,16 @@ check(
 check("Checks SKU restrictions", fileContains(reviewPath, "SKU restriction"));
 
 // 3. Bicep Planner references JSON schema completeness
-console.log("\n📄 05-bicep-planner.agent.md");
-const plannerPath = ".github/agents/05-bicep-planner.agent.md";
+console.log("\n📄 05b-bicep-planner.agent.md");
+const plannerPath = ".github/agents/05b-bicep-planner.agent.md";
 check(
   "Notes JSON consumption by Code Generator",
   fileContains(plannerPath, "consumed downstream"),
 );
 check(
-  "Requires bicepPropertyPath in JSON",
-  fileContains(plannerPath, "bicepPropertyPath"),
+  "Requires bicepPropertyPath or azurePropertyPath in JSON",
+  fileContains(plannerPath, "bicepPropertyPath") ||
+    fileContains(plannerPath, "azurePropertyPath"),
 );
 check(
   "Requires requiredValue in JSON",
@@ -147,6 +148,84 @@ check("applyTo includes *.bicep", fileContains(govDiscPath, "**/*.bicep"));
 check(
   "Has Downstream Enforcement section",
   fileContains(govDiscPath, "## Downstream Enforcement"),
+);
+
+// 6. Terraform Planner uses azurePropertyPath (not bicepPropertyPath)
+console.log("\n📄 05t-terraform-planner.agent.md");
+const tfPlannerPath = ".github/agents/05t-terraform-planner.agent.md";
+check(
+  "Uses azurePropertyPath (not bicepPropertyPath) for property mapping",
+  fileContains(tfPlannerPath, "azurePropertyPath") &&
+    fileContains(tfPlannerPath, "always use `azurePropertyPath`"),
+);
+check(
+  "Governance discovery is a HARD GATE",
+  fileContains(tfPlannerPath, "HARD GATE"),
+);
+check(
+  "References 04-governance-constraints.json",
+  fileContains(tfPlannerPath, "04-governance-constraints.json"),
+);
+
+// 7. Terraform Code Generator governance compliance
+console.log("\n📄 06t-terraform-codegen.agent.md");
+const tfCodeGenPath = ".github/agents/06t-terraform-codegen.agent.md";
+check(
+  "Has Phase 1.5: Governance Compliance Mapping",
+  fileContains(tfCodeGenPath, "Phase 1.5"),
+);
+check("Phase 1.5 is a HARD GATE", fileContains(tfCodeGenPath, "HARD GATE"));
+check(
+  "References 04-governance-constraints.json",
+  fileContains(tfCodeGenPath, "04-governance-constraints.json"),
+);
+check(
+  "Uses azurePropertyPath for policy translation",
+  fileContains(tfCodeGenPath, "azurePropertyPath"),
+);
+
+// 8. Terraform review subagent has governance compliance section
+console.log("\n📄 terraform-review-subagent.agent.md");
+const tfReviewPath =
+  ".github/agents/_subagents/terraform-review-subagent.agent.md";
+check(
+  "Has Governance Compliance section",
+  fileContains(tfReviewPath, "### 7. Governance Compliance"),
+);
+check(
+  "References azurePropertyPath for Terraform attribute translation",
+  fileContains(tfReviewPath, "azurePropertyPath"),
+);
+
+// 9. terraform-policy-compliance.instructions.md exists and is valid
+console.log("\n📄 terraform-policy-compliance.instructions.md");
+const tfPolicyInstrPath =
+  ".github/instructions/terraform-policy-compliance.instructions.md";
+check("File exists", fileExists(tfPolicyInstrPath));
+check(
+  "Has correct applyTo scope including *.tf",
+  fileContains(tfPolicyInstrPath, "**/*.tf"),
+);
+check(
+  'States "Azure Policy always wins"',
+  fileContains(tfPolicyInstrPath, "Azure Policy always wins"),
+);
+check(
+  "References 04-governance-constraints.json",
+  fileContains(tfPolicyInstrPath, "04-governance-constraints.json"),
+);
+
+// 10. Governance discovery subagent produces BOTH bicepPropertyPath AND azurePropertyPath
+console.log("\n📄 governance-discovery-subagent.agent.md (dual-field)");
+const govDiscSubPath =
+  ".github/agents/_subagents/governance-discovery-subagent.agent.md";
+check(
+  "Produces bicepPropertyPath field in JSON output",
+  fileContains(govDiscSubPath, "bicepPropertyPath"),
+);
+check(
+  "Produces azurePropertyPath field in JSON output",
+  fileContains(govDiscSubPath, "azurePropertyPath"),
 );
 
 // Summary
