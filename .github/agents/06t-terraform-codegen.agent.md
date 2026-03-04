@@ -33,7 +33,6 @@ tools:
     read/problems,
     read/readFile,
     read/readNotebookCellOutput,
-    agent/runSubagent,
     agent,
     edit/createDirectory,
     edit/createFile,

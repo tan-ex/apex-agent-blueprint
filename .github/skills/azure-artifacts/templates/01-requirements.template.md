@@ -14,6 +14,7 @@
 - [💰 Budget](#-budget)
 - [🔧 Operational Requirements](#-operational-requirements)
 - [🌍 Regional Preferences](#-regional-preferences)
+- [📊 Complexity Classification](#-complexity-classification)
 - [📋 Summary for Architecture Assessment](#-summary-for-architecture-assessment)
 - [References](#references)
 
@@ -269,6 +270,18 @@ Table of recommended controls based on workload pattern and compliance requireme
 | Primary Region     | swedencentral                       | {default — override if required} |
 | Failover Region    | {region or N/A}                     | {compliance / latency / cost}    |
 | Availability Zones | {Required / Preferred / Not needed} | {SLA / cost trade-off}           |
+
+---
+
+## 📊 Complexity Classification
+
+| Field      | Value                                                |
+| ---------- | ---------------------------------------------------- |
+| Complexity | `simple` / `standard` / `complex`                    |
+| Criteria   | simple: ≤3 resources, no custom policies, single env |
+|            | standard: 4-20 resources                             |
+|            | complex: 20+ resources or PCI-DSS/SOC2 compliance    |
+| Rationale  | {explain why this classification was chosen}         |
 
 ---
 

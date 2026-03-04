@@ -24,9 +24,9 @@ const REQUIRED_FIELDS = ["description"];
 // Patterns that are hard errors (break runtime behaviour if present)
 const FORBIDDEN_PATTERNS = [
   {
-    pattern: /^description:\s*[>|]\s*$/m,
+    pattern: /^description:\s*[>|][-\s]*$/m,
     message:
-      "description uses a YAML block scalar (> or |). " +
+      "description uses a YAML block scalar (>, >-, | or |-). " +
       "Use a single-line inline string instead — block scalars cause the " +
       "Copilot runtime to receive a literal '>' as the description, which " +
       "silently disables skill auto-discovery.",

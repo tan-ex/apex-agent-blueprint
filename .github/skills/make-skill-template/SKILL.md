@@ -1,9 +1,6 @@
 ---
 name: make-skill-template
-description: >-
-  Scaffolds new Agent Skills with SKILL.md frontmatter, folder structure, and bundled resources.
-  USE FOR: create a skill, scaffold skill, new skill template, add agent capability.
-  DO NOT USE FOR: Azure infrastructure, Bicep/Terraform code, architecture decisions.
+description: "Scaffolds new Agent Skills with SKILL.md frontmatter, folder structure, and bundled resources. USE FOR: create a skill, scaffold skill, new skill template, add agent capability. DO NOT USE FOR: Azure infrastructure, Bicep/Terraform code, architecture decisions."
 ---
 
 # Make Skill Template

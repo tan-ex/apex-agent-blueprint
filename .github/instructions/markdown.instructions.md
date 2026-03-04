@@ -13,7 +13,7 @@ Follow these guidelines to ensure documentation quality across the repository.
 - ATX-style headings (`##`, `###`) — never H1 in content
 - **CRITICAL: 120-char line limit** (CI + pre-commit enforced)
 - Break at natural points; LF line endings
-- Meaningful alt text for images; validate with `markdownlint`
+- Meaningful alt text for images; validate with `npm run lint:md`
 
 ## Line Length
 
@@ -68,7 +68,7 @@ See `azure-artifacts/SKILL.md` for styling standards, emoji, callouts, formattin
 ## Validation
 
 ```bash
-markdownlint '**/*.md' --ignore node_modules --config .markdownlint.json
+npm run lint:md
 ```
 
 ## Reference

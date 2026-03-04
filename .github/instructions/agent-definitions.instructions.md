@@ -43,6 +43,8 @@ handoffs:
 
 - Describe what the agent does, and what it does NOT do.
 - Mention any required standards (WAF, AVM-first, default regions) if applicable.
+- **MUST be a single-line inline string** — NOT a YAML block scalar (`>`, `>-`, `|`, `|-`).
+  Block scalars break VS Code prompts-diagnostics-provider and silently degrade discovery.
 
 ### `tools`
 

@@ -42,7 +42,6 @@ tools:
     read/problems,
     read/readFile,
     read/readNotebookCellOutput,
-    agent/runSubagent,
     agent,
     edit/createDirectory,
     edit/createFile,
@@ -156,9 +155,10 @@ Master orchestrator for the 7-step Azure infrastructure development workflow.
 
 **After confirming the project name**, read:
 
-1. **Read** `.github/skills/session-resume/SKILL.md` — JSON state schema, context budgets, resume protocol
-2. **Read** `.github/skills/azure-defaults/SKILL.md` — regions, tags
-3. **Read** `.github/skills/azure-artifacts/SKILL.md` — artifact file naming and structure overview
+1. **Read** `.github/skills/golden-principles/SKILL.md` — foundational quality principles for all agents
+2. **Read** `.github/skills/session-resume/SKILL.md` — JSON state schema, context budgets, resume protocol
+3. **Read** `.github/skills/azure-defaults/SKILL.md` — regions, tags
+4. **Read** `.github/skills/azure-artifacts/SKILL.md` — artifact file naming and structure overview
 
 ## Core Principles
 

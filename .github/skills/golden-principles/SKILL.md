@@ -1,9 +1,6 @@
 ---
 name: golden-principles
-description: >-
-  The 10 agent-first operating principles governing how agents work in this repository.
-  USE FOR: agent behavior rules, operating philosophy, principle lookup, governance invariants.
-  DO NOT USE FOR: Azure infrastructure, code generation, troubleshooting, diagram creation.
+description: "The 10 agent-first operating principles governing how agents work in this repository. USE FOR: agent behavior rules, operating philosophy, principle lookup, governance invariants. DO NOT USE FOR: Azure infrastructure, code generation, troubleshooting, diagram creation."
 ---
 
 # Golden Principles

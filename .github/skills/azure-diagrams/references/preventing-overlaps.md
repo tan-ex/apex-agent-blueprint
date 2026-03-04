@@ -1,3 +1,5 @@
+<!-- ref:preventing-overlaps-v1 -->
+
 # Preventing Overlaps in Complex Diagrams
 
 Guide for avoiding node and edge overlaps in Graphviz-based diagrams.
@@ -24,6 +26,7 @@ dot.edge('a', 'b', headlabel='Token', taillabel='Request')
 ```
 
 **For sequence-style numbered flows**:
+
 ```python
 # Don't label edges - use intermediate nodes instead
 dot.node('step1', '1. Redirect', shape='plaintext')
@@ -50,6 +53,7 @@ dot.attr(
 ```
 
 **For the diagrams library** (Python diagrams):
+
 ```python
 with Diagram(
     "Title",
@@ -96,15 +100,15 @@ dot.attr(
     # Increase spacing between nodes
     nodesep='1.0',      # Horizontal spacing (default 0.25)
     ranksep='1.0',      # Vertical spacing between ranks (default 0.5)
-    
+
     # Add padding around the graph
     pad='0.5',
     margin='0.5',
-    
+
     # Overlap prevention
     overlap='false',     # Prevent node overlaps (for neato/fdp engines)
     splines='spline',    # Curved lines that route around nodes
-    
+
     # For very complex diagrams
     sep='+25,25',        # Minimum separation added to nodes
 )
@@ -112,12 +116,12 @@ dot.attr(
 
 ## Spline Types - Choosing the Right Edge Style
 
-| Spline Type | Best For | Pros | Cons |
-|-------------|----------|------|------|
-| `spline` | General architecture diagrams | Smooth curves, avoids nodes | Can look busy with many edges |
-| `ortho` | Pipeline/flow diagrams | Clean right-angles, professional | Labels may not display, can fail with complex graphs |
-| `polyline` | Fallback when ortho fails | Reliable, follows angles | Less elegant than ortho |
-| `line` | Simple diagrams | Direct, fast rendering | Lines may cross nodes |
+| Spline Type | Best For                      | Pros                             | Cons                                                 |
+| ----------- | ----------------------------- | -------------------------------- | ---------------------------------------------------- |
+| `spline`    | General architecture diagrams | Smooth curves, avoids nodes      | Can look busy with many edges                        |
+| `ortho`     | Pipeline/flow diagrams        | Clean right-angles, professional | Labels may not display, can fail with complex graphs |
+| `polyline`  | Fallback when ortho fails     | Reliable, follows angles         | Less elegant than ortho                              |
+| `line`      | Simple diagrams               | Direct, fast rendering           | Lines may cross nodes                                |
 
 **Recommendation by diagram type:**
 
@@ -136,6 +140,7 @@ graph_attr = {"splines": "spline", "overlap": "false"}
 ```
 
 **Note**: With `splines="ortho"`, edge labels may not render. Use `xlabel` instead of `label`:
+
 ```python
 # With ortho splines, use xlabel
 dot.edge('a', 'b', xlabel='connection')  # Works
@@ -145,6 +150,7 @@ dot.edge('a', 'b', label='connection')   # May not display
 ## Recommended Settings by Diagram Complexity
 
 ### Simple (< 10 nodes)
+
 ```python
 dot.attr(nodesep='0.5', ranksep='0.75')
 ```
@@ -184,7 +190,7 @@ Use labels that communicate function, not just technology:
 # Less informative
 sql = SQLDatabases("SQL")
 
-# More informative  
+# More informative
 sql = SQLDatabases("Orders DB")
 
 # With tier/environment info
@@ -192,15 +198,17 @@ sql = SQLDatabases("Orders\n(S3 tier)")
 ```
 
 ### Medium (10-25 nodes)
+
 ```python
 dot.attr(nodesep='0.8', ranksep='1.0', pad='0.5')
 ```
 
 ### Complex (25+ nodes) - Like the W2 Architecture
+
 ```python
 dot.attr(
     nodesep='1.2',       # More horizontal space
-    ranksep='1.2',       # More vertical space  
+    ranksep='1.2',       # More vertical space
     pad='0.75',
     splines='spline',    # Curved edges route better
     concentrate='false', # Don't merge edges (can cause confusion)
@@ -212,12 +220,14 @@ dot.attr(
 ### Problem: Database cylinder overlapping adjacent nodes
 
 **Solution 1: Increase node width**
+
 ```python
-dot.node('database', 'W2 Database\nSQL Server 2008 R2', 
+dot.node('database', 'W2 Database\nSQL Server 2008 R2',
          shape='cylinder', width='2.0', height='1.5')
 ```
 
 **Solution 2: Use rank constraints to force positioning**
+
 ```python
 # Force nodes to be on the same horizontal level
 with dot.subgraph() as s:
@@ -233,6 +243,7 @@ with dot.subgraph() as s:
 ```
 
 **Solution 3: Add invisible spacer nodes**
+
 ```python
 dot.node('spacer1', '', style='invis', width='0.5')
 dot.edge('node_before', 'spacer1', style='invis')
@@ -242,6 +253,7 @@ dot.edge('spacer1', 'database', style='invis')
 ### Problem: Edges crossing through nodes
 
 **Solution: Use xlabel instead of label for edge labels**
+
 ```python
 # Instead of:
 dot.edge('a', 'b', label='connection')
@@ -251,6 +263,7 @@ dot.edge('a', 'b', xlabel='connection')
 ```
 
 **Solution: Change spline type**
+
 ```python
 # Try different spline options
 dot.attr(splines='spline')    # Curved - usually best
@@ -261,6 +274,7 @@ dot.attr(splines='curved')    # Similar to spline
 ### Problem: Clusters overlapping
 
 **Solution: Add margin inside clusters**
+
 ```python
 with dot.subgraph(name='cluster_0') as c:
     c.attr(
@@ -290,7 +304,7 @@ dot.attr('edge', fontname='Segoe UI', fontsize='9')
 
 # External Interfaces
 with dot.subgraph(name='cluster_external') as c:
-    c.attr(label='EXTERNAL INTERFACES', style='filled', fillcolor='#F3E5F5', 
+    c.attr(label='EXTERNAL INTERFACES', style='filled', fillcolor='#F3E5F5',
            color='#9C27B0', fontcolor='#9C27B0', margin='20')
     c.node('scanners', 'Scanners\n(Kyocera)', shape='box', style='filled', fillcolor='white')
     c.node('email', 'Email\n(SMTP)', shape='box', style='filled', fillcolor='white')
@@ -301,7 +315,7 @@ with dot.subgraph(name='cluster_external') as c:
 with dot.subgraph(name='cluster_w2') as c:
     c.attr(label='W2 DOCUMENT MANAGEMENT', style='filled', fillcolor='#E8F5E9',
            color='#4CAF50', fontcolor='#4CAF50', margin='20')
-    
+
     # Application Server row
     with c.subgraph(name='cluster_appserver') as app:
         app.attr(label='W2 Application Server', style='filled', fillcolor='#C8E6C9', margin='15')
@@ -311,7 +325,7 @@ with dot.subgraph(name='cluster_w2') as c:
         app.node('ui', 'User\nInterface', shape='box', style='filled', fillcolor='white')
         app.node('reporting', 'Reporting\nModule', shape='box', style='filled', fillcolor='white')
         app.node('security', 'Security\n(Windows Auth)', shape='box', style='filled', fillcolor='white')
-    
+
     # Force app server nodes to same rank
     with c.subgraph() as s:
         s.attr(rank='same')
@@ -321,9 +335,9 @@ with dot.subgraph(name='cluster_w2') as c:
         s.node('ui')
         s.node('reporting')
         s.node('security')
-    
+
     # Database on its own rank with more space
-    c.node('w2db', 'W2 Database\nSQL Server 2008 R2', 
+    c.node('w2db', 'W2 Database\nSQL Server 2008 R2',
            shape='cylinder', style='filled', fillcolor='#2196F3', fontcolor='white',
            width='2.5', height='1.2')  # Explicit size
 
@@ -347,7 +361,7 @@ with dot.subgraph(name='cluster_ssis') as c:
 with dot.subgraph(name='cluster_backend') as c:
     c.attr(label='BACKEND SYSTEMS', style='filled', fillcolor='#E8EAF6',
            color='#3F51B5', fontcolor='#3F51B5', margin='20')
-    
+
     with c.subgraph(name='cluster_mri') as mri:
         mri.attr(label='MRI REVS & BENS', style='filled', fillcolor='#C5CAE9', margin='15')
         mri.node('benefits', 'Benefits\n(HB/CTR)', shape='box', style='filled', fillcolor='white')
@@ -399,7 +413,7 @@ If a diagram has overlaps, add these attributes:
 ```python
 dot.attr(
     nodesep='1.2',
-    ranksep='1.2', 
+    ranksep='1.2',
     pad='0.5',
     splines='spline',
 )

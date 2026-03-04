@@ -1,3 +1,5 @@
+<!-- ref:entity-relationship-diagrams-v1 -->
+
 # Entity Relationship Diagrams (ERD)
 
 Generate professional database entity relationship diagrams showing tables, columns, and relationships.
@@ -14,7 +16,7 @@ def create_erd(title, filename):
     dot = graphviz.Digraph(title, filename=filename, format='png')
     dot.attr(rankdir='LR', splines='spline', nodesep='0.8', ranksep='1.2')
     dot.attr('node', shape='none', margin='0')
-    
+
     # Helper function to create table HTML
     def table_node(name, columns):
         """
@@ -23,22 +25,22 @@ def create_erd(title, filename):
         """
         html = f'''<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4">
         <TR><TD BGCOLOR="#4472C4" COLSPAN="3"><FONT COLOR="white"><B>{name}</B></FONT></TD></TR>'''
-        
+
         for col_name, data_type, key_type in columns:
             key_indicator = ""
             if key_type == 'PK':
                 key_indicator = '🔑 '
             elif key_type == 'FK':
                 key_indicator = '🔗 '
-            
+
             html += f'''<TR>
                 <TD ALIGN="LEFT">{key_indicator}{col_name}</TD>
                 <TD ALIGN="LEFT"><FONT COLOR="gray">{data_type}</FONT></TD>
             </TR>'''
-        
+
         html += '</TABLE>>'
         return html
-    
+
     # Define tables
     dot.node('Documents', table_node('Documents', [
         ('DocumentId', 'INT', 'PK'),
@@ -48,33 +50,33 @@ def create_erd(title, filename):
         ('CreatedDate', 'DATETIME', None),
         ('CreatedBy', 'INT', 'FK'),
     ]))
-    
+
     dot.node('Accounts', table_node('Accounts', [
         ('AccountId', 'INT', 'PK'),
         ('AccountName', 'VARCHAR(100)', None),
         ('AccountType', 'VARCHAR(50)', None),
         ('Status', 'VARCHAR(20)', None),
     ]))
-    
+
     dot.node('Users', table_node('Users', [
         ('UserId', 'INT', 'PK'),
         ('Username', 'VARCHAR(50)', None),
         ('Email', 'VARCHAR(100)', None),
         ('RoleId', 'INT', 'FK'),
     ]))
-    
+
     dot.node('Roles', table_node('Roles', [
         ('RoleId', 'INT', 'PK'),
         ('RoleName', 'VARCHAR(50)', None),
         ('Permissions', 'TEXT', None),
     ]))
-    
+
     # Define relationships
     # Crow's foot notation using edge labels
     dot.edge('Documents', 'Accounts', label='N:1', arrowhead='crow', arrowtail='tee')
     dot.edge('Documents', 'Users', label='N:1', arrowhead='crow', arrowtail='tee')
     dot.edge('Users', 'Roles', label='N:1', arrowhead='crow', arrowtail='tee')
-    
+
     dot.render(cleanup=True)
     return f"{filename}.png"
 ```
@@ -87,19 +89,19 @@ from diagrams.generic.database import SQL
 from diagrams.onprem.database import PostgreSQL, MySQL
 
 with Diagram("Database Schema", show=False, filename="erd-simple", direction="LR"):
-    
+
     with Cluster("Core Entities"):
         documents = PostgreSQL("Documents")
         accounts = PostgreSQL("Accounts")
         users = PostgreSQL("Users")
-    
+
     with Cluster("Reference Data"):
         roles = PostgreSQL("Roles")
         permissions = PostgreSQL("Permissions")
-    
+
     with Cluster("Audit"):
         audit_log = PostgreSQL("AuditLog")
-    
+
     # Relationships
     documents >> Edge(label="belongs to") >> accounts
     documents >> Edge(label="created by") >> users
@@ -114,7 +116,7 @@ with Diagram("Database Schema", show=False, filename="erd-simple", direction="LR
 def generate_mermaid_erd(entities):
     """Generate Mermaid ERD syntax."""
     mermaid = "erDiagram\n"
-    
+
     for entity in entities:
         name = entity['name']
         mermaid += f"    {name} {{\n"
@@ -126,7 +128,7 @@ def generate_mermaid_erd(entities):
                 mermaid += " FK"
             mermaid += "\n"
         mermaid += "    }\n"
-    
+
     return mermaid
 
 # Example
@@ -159,6 +161,7 @@ relationships = """
 ## Relationship Notation
 
 ### Crow's Foot Notation
+
 ```text
 ||--||  One to One
 ||--o{  One to Many (optional)
@@ -167,6 +170,7 @@ relationships = """
 ```
 
 ### In Graphviz
+
 ```python
 # One to Many
 dot.edge('Parent', 'Child', arrowhead='crow', arrowtail='tee')
@@ -188,7 +192,7 @@ def create_full_erd(filename="database-erd"):
     dot = graphviz.Digraph('ERD', filename=filename, format='png')
     dot.attr(rankdir='TB', splines='spline')
     dot.attr('node', shape='none')
-    
+
     def make_table(name, columns, color="#4472C4"):
         rows = "".join([
             f'<TR><TD ALIGN="LEFT" PORT="{c[0]}">{c[0]}</TD><TD ALIGN="LEFT"><FONT COLOR="gray">{c[1]}</FONT></TD></TR>'
@@ -198,7 +202,7 @@ def create_full_erd(filename="database-erd"):
             <TR><TD BGCOLOR="{color}" COLSPAN="2"><FONT COLOR="white"><B>{name}</B></FONT></TD></TR>
             {rows}
         </TABLE>>'''
-    
+
     # Core entities
     dot.node('Documents', make_table('Documents', [
         ('DocumentId', 'INT PK'),
@@ -211,7 +215,7 @@ def create_full_erd(filename="database-erd"):
         ('ModifiedDate', 'DATETIME2'),
         ('CreatedBy', 'INT FK'),
     ]))
-    
+
     dot.node('Accounts', make_table('Accounts', [
         ('AccountId', 'INT PK'),
         ('AccountRef', 'VARCHAR(50)'),
@@ -219,34 +223,34 @@ def create_full_erd(filename="database-erd"):
         ('ServiceAreaId', 'INT FK'),
         ('Status', 'VARCHAR(20)'),
     ], color="#548235"))
-    
+
     dot.node('Processes', make_table('Processes', [
         ('ProcessId', 'INT PK'),
         ('ProcessName', 'NVARCHAR(100)'),
         ('Description', 'NVARCHAR(500)'),
         ('ServiceAreaId', 'INT FK'),
     ], color="#548235"))
-    
+
     dot.node('Users', make_table('Users', [
         ('UserId', 'INT PK'),
         ('EntraId', 'UNIQUEIDENTIFIER'),
         ('DisplayName', 'NVARCHAR(200)'),
         ('Email', 'NVARCHAR(200)'),
     ], color="#BF9000"))
-    
+
     dot.node('ServiceAreas', make_table('ServiceAreas', [
         ('ServiceAreaId', 'INT PK'),
         ('AreaName', 'NVARCHAR(100)'),
         ('AreaCode', 'VARCHAR(20)'),
     ], color="#7030A0"))
-    
+
     # Relationships
     dot.edge('Documents:AccountId', 'Accounts:AccountId')
     dot.edge('Documents:ProcessId', 'Processes:ProcessId')
     dot.edge('Documents:CreatedBy', 'Users:UserId')
     dot.edge('Accounts:ServiceAreaId', 'ServiceAreas:ServiceAreaId')
     dot.edge('Processes:ServiceAreaId', 'ServiceAreas:ServiceAreaId')
-    
+
     dot.render(cleanup=True)
     print(f"Generated: {filename}.png")
 
@@ -264,7 +268,7 @@ def create_access_matrix(filename="access-matrix"):
     dot = graphviz.Digraph('Access Matrix', filename=filename, format='png')
     dot.attr(rankdir='TB')
     dot.attr('node', shape='none')
-    
+
     # Create matrix as HTML table
     matrix = '''<<TABLE BORDER="1" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8">
         <TR>
@@ -303,7 +307,7 @@ def create_access_matrix(filename="access-matrix"):
             <TD BGCOLOR="#FFC7CE">-</TD>
         </TR>
     </TABLE>>'''
-    
+
     dot.node('matrix', matrix)
     dot.render(cleanup=True)
     print(f"Generated: {filename}.png")
@@ -314,6 +318,7 @@ create_access_matrix()
 ## Converting ASCII ERDs
 
 When you see ASCII like:
+
 ```text
 ┌─────────────┐       ┌─────────────┐
 │  Documents  │       │  Accounts   │
@@ -325,6 +330,7 @@ When you see ASCII like:
 ```
 
 Extract:
+
 1. Table names (headers)
 2. Column names (rows in boxes)
 3. Relationships (arrows between boxes)

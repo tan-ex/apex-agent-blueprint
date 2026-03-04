@@ -10,9 +10,7 @@ applyTo: "**/.github/skills/**/SKILL.md, **/.claude/skills/**/SKILL.md"
 ```yaml
 ---
 name: webapp-testing
-description: >-
-  Toolkit for testing local web applications using Playwright. Use when asked
-  to verify frontend functionality, debug UI behavior, or capture screenshots.
+description: "Toolkit for testing local web applications using Playwright. Use when asked to verify frontend functionality, debug UI behavior, or capture screenshots."
 license: Complete terms in LICENSE.txt
 ---
 ```
@@ -26,6 +24,10 @@ license: Complete terms in LICENSE.txt
 > **CRITICAL**: The `description` is the PRIMARY mechanism for automatic skill discovery.
 > Copilot reads ONLY `name` + `description` to decide whether to load a skill.
 > A vague description means the skill never activates.
+>
+> **NEVER use YAML block scalars** (`>`, `>-`, `|`, `|-`) for description.
+> Use a single-line `description: "..."` inline string.
+> Block scalars break VS Code prompts-diagnostics-provider.
 
 ## Body Sections
 

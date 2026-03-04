@@ -12,6 +12,16 @@
 ## 💰 Budget
 ## 🔧 Operational Requirements
 ## 🌍 Regional Preferences
+## 📊 Complexity Classification
 ## 📋 Summary for Architecture Assessment
 ## References
 ```
+
+### Complexity Classification
+
+The `## 📊 Complexity Classification` section must include:
+
+- **complexity**: `simple` / `standard` / `complex`
+- **Criteria**: `simple` = ≤3 resources, no custom policies, single env;
+  `standard` = 4-20 resources; `complex` = 20+ resources or PCI-DSS/SOC2
+- This field drives workflow optimization (fast-path for simple projects)

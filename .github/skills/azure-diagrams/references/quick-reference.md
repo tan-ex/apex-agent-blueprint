@@ -1,3 +1,5 @@
+<!-- ref:quick-reference-v1 -->
+
 # Quick Reference Card
 
 Copy-paste snippets for rapid diagram creation.
@@ -127,36 +129,41 @@ with Diagram(
 
 ## Direction Guide
 
-| Direction | Use Case |
-|-----------|----------|
-| `LR` | Workflows, data flows, pipelines |
-| `TB` | Layered architectures, hierarchy |
-| `RL` | Right-to-left flows |
-| `BT` | Bottom-up hierarchy |
+| Direction | Use Case                         |
+| --------- | -------------------------------- |
+| `LR`      | Workflows, data flows, pipelines |
+| `TB`      | Layered architectures, hierarchy |
+| `RL`      | Right-to-left flows              |
+| `BT`      | Bottom-up hierarchy              |
 
 ## Quick Patterns
 
 ### API Gateway Pattern
+
 ```python
 users >> apim >> [logic, func] >> [cosmos, sql]
 ```
 
 ### Event-Driven Pattern
+
 ```python
 source >> event_grid >> [handler1, handler2, handler3]
 ```
 
 ### Pub/Sub Pattern
+
 ```python
 [producer1, producer2] >> service_bus >> [consumer1, consumer2]
 ```
 
 ### Hybrid Pattern
+
 ```python
 on_prem >> data_gateway >> logic_apps >> azure_services
 ```
 
 ### Security Pattern
+
 ```python
 component >> Edge(style="dashed") >> key_vault
 component >> Edge(style="dotted") >> app_insights

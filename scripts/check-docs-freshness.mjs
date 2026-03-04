@@ -285,6 +285,50 @@ async function checkVersionHeaders() {
   }
 }
 
+// ── Check 8: Skill references freshness ─────────────────────────────
+
+async function checkSkillReferences() {
+  const skillDir = join(ROOT, ".github", "skills");
+  if (!(await exists(skillDir))) return;
+
+  const skills = await listDirs(skillDir);
+  for (const skill of skills) {
+    const refsDir = join(skillDir, skill, "references");
+    if (!(await exists(refsDir))) continue;
+
+    const skillMd = join(skillDir, skill, "SKILL.md");
+    if (!(await exists(skillMd))) continue;
+
+    const skillContent = await readText(skillMd);
+    const refFiles = (await readdir(refsDir)).filter((f) => f.endsWith(".md"));
+
+    // Check each reference file has a canary marker
+    for (const refFile of refFiles) {
+      const refContent = await readText(join(refsDir, refFile));
+      if (!refContent) continue;
+
+      if (!refContent.includes("<!-- ref:")) {
+        addFinding(
+          `.github/skills/${skill}/references/${refFile}`,
+          1,
+          `Reference file missing canary marker (<!-- ref:{name}-v1 -->)`,
+          "LOW",
+        );
+      }
+    }
+
+    // Check SKILL.md has a Reference Index section if references exist
+    if (refFiles.length > 0 && !skillContent.includes("Reference Index")) {
+      addFinding(
+        `.github/skills/${skill}/SKILL.md`,
+        0,
+        `Has ${refFiles.length} reference files but no "## Reference Index" section`,
+        "MEDIUM",
+      );
+    }
+  }
+}
+
 // ── Main ────────────────────────────────────────────────────────────
 
 async function main() {
@@ -305,6 +349,9 @@ async function main() {
 
   console.log("─── Skill Table Verification ───");
   await checkSkillTable();
+
+  console.log("─── Skill References Freshness ───");
+  await checkSkillReferences();
 
   console.log("─── Version Header Check ───");
   await checkVersionHeaders();
