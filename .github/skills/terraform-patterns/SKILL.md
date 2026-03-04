@@ -1,6 +1,9 @@
 ---
 name: terraform-patterns
-description: Common Azure Terraform infrastructure patterns using AVM-TF modules, including hub-spoke networking, private endpoints, diagnostic settings, conditional deployments, module composition, managed identity, and plan interpretation. Includes AVM Known Pitfalls section. Use when designing or generating Terraform templates that combine multiple Azure resources into repeatable patterns.
+description: >-
+  Reusable Azure Terraform patterns: hub-spoke, private endpoints, diagnostics, AVM-TF modules.
+  USE FOR: Terraform template design, hub-spoke networking, AVM modules, plan interpretation.
+  DO NOT USE FOR: Bicep code, architecture decisions, troubleshooting, diagram generation.
 compatibility: Requires Terraform >= 1.9, azurerm ~> 4.0, Azure CLI
 ---
 

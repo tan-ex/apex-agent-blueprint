@@ -48,6 +48,17 @@ recommendations.
 
 ## Workflow
 
+### Phase 0 — Baseline Snapshot (Automated)
+
+Before any analysis, create a baseline snapshot automatically:
+
+```bash
+npm run snapshot:baseline -- "ctx-opt-$(date -u +%Y%m%d-%H%M%S)"
+```
+
+Store the label — it will be used in Phase 6 to generate the diff report.
+Do NOT ask the user — just run it and confirm the snapshot was created.
+
 ### Phase 1 — Discovery & Log Collection
 
 1. Read `AGENTS.md` for the agent roster and project map
@@ -112,6 +123,23 @@ using the template from the skill. Include:
 - Agent-specific recommendations
 - Implementation priority matrix (effort vs impact)
 
+### Phase 6 — Before/After Diff Report (Automated)
+
+After the user has applied recommendations (or after applying them in this
+session), generate the diff report:
+
+```bash
+npm run diff:baseline -- --baseline {label-from-phase-0}
+```
+
+Present a summary to the user:
+
+- Total files changed per category (agents/instructions/prompts/skills/AGENTS.md)
+- Net line impact
+- Location of the full diff report
+
+If no changes were applied yet, remind the user they can run the diff later.
+
 ## Output Expectations
 
 - **File**: `agent-output/{project}/11-context-optimization-report.md`
@@ -121,6 +149,7 @@ using the template from the skill. Include:
 
 ## Quality Assurance
 
+- [ ] Baseline snapshot created before analysis (Phase 0)
 - [ ] All agent definitions were analyzed (count matches `.github/agents/`)
 - [ ] All instruction files were audited (count matches `.github/instructions/`)
 - [ ] All skills were audited (count matches `.github/skills/`)
@@ -128,3 +157,4 @@ using the template from the skill. Include:
 - [ ] Report follows the template in the context-optimizer skill
 - [ ] Findings are prioritized (P0 → P3)
 - [ ] Token savings estimates are included for each recommendation
+- [ ] Diff report generated after changes applied (Phase 6)

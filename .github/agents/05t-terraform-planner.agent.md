@@ -92,360 +92,148 @@ handoffs:
 
 > [!CAUTION]
 > **HCP GUARDRAIL**: Never plan for `terraform { cloud { } }` or assume `TFE_TOKEN`.
-> Always specify Azure Storage Account backend only. If a reference file contains HCP
-> patterns, replace them with Azure Storage backend configuration.
+> Always specify Azure Storage Account backend only.
 
 ## MANDATORY: Read Skills First
 
-**Before doing ANY work**, read these skills for configuration and template structure:
+**Before doing ANY work**, read these skills:
 
-1. **Read** `.github/skills/azure-defaults/SKILL.md` — regions, tags, AVM-TF modules,
-   governance discovery, naming, and the **Terraform Conventions** section
-2. **Read** `.github/skills/azure-artifacts/SKILL.md` — H2 templates for
-   `04-implementation-plan.md` and `04-governance-constraints.md`
-3. **Read** the template files for your artifacts:
-   - `.github/skills/azure-artifacts/templates/04-implementation-plan.template.md`
-   - `.github/skills/azure-artifacts/templates/04-governance-constraints.template.md`
-     Use as structural skeletons (replicate badges, TOC, navigation, attribution exactly).
-4. **Read** `.github/skills/terraform-patterns/SKILL.md` — reusable patterns for hub-spoke,
-   private endpoints, diagnostic settings, managed identity, module composition
+1. **Read** `.github/skills/azure-defaults/SKILL.md` — regions, tags, AVM-TF, governance, naming, Terraform Conventions
+2. **Read** `.github/skills/azure-artifacts/SKILL.md` — H2 templates for `04-implementation-plan.md` and `04-governance-constraints.md`
+3. **Read** artifact template files: `azure-artifacts/templates/04-implementation-plan.template.md` + `04-governance-constraints.template.md`
 
-These skills are your single source of truth. Do NOT use hardcoded values.
+> Read `.github/skills/terraform-patterns/SKILL.md` on-demand during Phase 2 for hub-spoke, PE, diagnostics patterns.
 
 ## DO / DON'T
 
-### DO
-
-- ✅ Verify Azure connectivity (`az account show`) FIRST — governance is a hard gate
-- ✅ Use REST API for policy discovery (includes management group-inherited policies)
-- ✅ Validate REST API count matches Azure Portal (Policy > Assignments) total
-- ✅ Run governance discovery via REST API + ARG BEFORE planning (see azure-defaults skill)
-- ✅ Check AVM-TF availability for EVERY resource via `terraform/search_modules` +
-  `terraform/get_module_details`
-- ✅ Use AVM-TF module defaults for resource configurations — add deprecation research only
-  for non-AVM resources
-- ✅ Check `azurerm` provider resource arguments via `terraform/search_providers` +
-  `terraform/get_provider_details`
-- ✅ Check latest provider version via `terraform/get_latest_provider_version`
-- ✅ Include governance constraints in the implementation plan
-- ✅ Define tasks as YAML-structured specs (resource, module, dependencies, config)
-- ✅ Generate both `04-implementation-plan.md` and `04-governance-constraints.md`
-- ✅ Use `azurePropertyPath` (not `bicepPropertyPath`) for property mapping in plan
-- ✅ Auto-generate Step 4 diagrams in the same run:
-  - `04-dependency-diagram.py` + `04-dependency-diagram.png`
-  - `04-runtime-diagram.py` + `04-runtime-diagram.png`
-- ✅ Match H2 headings from azure-artifacts skill exactly
-- ✅ Update `agent-output/{project}/README.md` — mark Step 4 complete, add your artifacts
-- ✅ Ask user for deployment strategy (phased vs single) — MANDATORY GATE
-- ✅ Default recommendation: phased deployment (especially for >5 resources)
-- ✅ Wait for user approval before handoff to terraform-code
-
-### DON'T
-
-- ❌ Write ANY Terraform code — this agent plans, terraform-code implements
-- ❌ Skip governance discovery — this is a HARD GATE, not optional
-- ❌ Generate the implementation plan before asking the user about deployment strategy (Phase 3.5 `askQuestions` is mandatory)
-- ❌ Use `az policy assignment list` alone — it misses management group-inherited policies
-- ❌ Proceed with incomplete policy data (if REST API fails, STOP)
-- ❌ Assume module inputs are valid without checking AVM-TF variable schema
-- ❌ Use `bicepPropertyPath` in plan output — always use `azurePropertyPath`
-- ❌ Plan `terraform { cloud { } }` blocks or `TFE_TOKEN` usage
-- ❌ Plan backends other than Azure Storage Account
-- ❌ Proceed to terraform-code without explicit user approval
-- ❌ Add H2 headings not in the template (use H3 inside nearest H2)
-- ❌ Ignore policy `effect` field — `Deny` = blocker, `Audit` = warning only
-- ❌ Generate governance constraints from best-practice assumptions
-- ❌ Use community package tool names (`moduleSearch`, `providerDetails`, etc.) — that
-  package is archived; use `terraform/search_modules` and `terraform/search_providers`
+| DO                                                                    | DON'T                                                                 |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Verify Azure connectivity (`az account show`) FIRST                   | Write ANY Terraform code — this agent plans only                      |
+| Run governance discovery via REST API + ARG BEFORE planning           | Skip governance discovery (HARD GATE)                                 |
+| Check AVM-TF for EVERY resource (`terraform/search_modules`)          | Generate plan before asking deployment strategy (Phase 3.5 mandatory) |
+| Use `terraform/get_module_details` for variable schema                | Use `az policy assignment list` alone (misses mgmt group policies)    |
+| always use `azurePropertyPath` (not `bicepPropertyPath`) in plan      | Plan `terraform { cloud { } }` or `TFE_TOKEN` usage                   |
+| Define tasks as YAML specs (resource, module, dependencies, config)   | Plan backends other than Azure Storage Account                        |
+| Generate `04-implementation-plan.md` + `04-governance-constraints.md` | Proceed to terraform-code without explicit user approval              |
+| Auto-generate `04-dependency-diagram.py/.png` + `04-runtime-diagram`  | Ignore policy `effect` — `Deny` = blocker, `Audit` = warning only     |
+| Ask user for deployment strategy (phased vs single) — MANDATORY GATE  | Use archived tool names (`moduleSearch` etc.) — use `terraform/*` MCP |
+| Match H2 headings from azure-artifacts templates exactly              | Generate governance from best-practice assumptions                    |
 
 ## Prerequisites Check
 
-Before starting, validate `02-architecture-assessment.md` exists in `agent-output/{project}/`.
-If missing, STOP and request handoff to Architect agent.
+Validate `02-architecture-assessment.md` exists in `agent-output/{project}/`.
+If missing, STOP → handoff to Architect agent. Read for: resource list, SKUs, WAF scores.
 
-Read `02-architecture-assessment.md` for: resource list, SKU/tier recommendations, WAF
-scores, architecture decisions, and compliance requirements.
+## Session State Protocol
+
+**Read** `.github/skills/session-resume/SKILL.md` for the full protocol.
+
+- **Context budget**: 2 files at startup (`00-session-state.json` + `02-architecture-assessment.md`)
+- **My step**: 4
+- **Sub-steps**: `phase_1_governance` → `phase_2_avm` → `phase_3_plan` →
+  `phase_3.5_strategy` → `phase_4_diagrams` → `phase_5_challenger` →
+  `phase_6_artifact`
+- **Resume**: Read `00-session-state.json` first. If `steps.4.status = "in_progress"` with a `sub_step`, skip to that checkpoint.
+- **State writes**: Update `00-session-state.json` after each phase.
 
 ## Core Workflow
 
 ### Phase 1: Governance Discovery (MANDATORY GATE)
 
 > [!CAUTION]
-> This is a **hard gate**. If governance discovery fails, STOP and inform the user.
-> Do NOT proceed to Phase 2 with incomplete policy data.
+> **Hard gate**. If governance discovery fails, STOP. Do NOT proceed with incomplete policy data.
 
-Delegate governance discovery to `governance-discovery-subagent`:
+1. Delegate to `governance-discovery-subagent` (queries REST API + ARG, classifies effects)
+2. Review result — Status must be COMPLETE (if PARTIAL/FAILED, STOP)
+3. Integrate into `04-governance-constraints.md` + `.json`; `Deny` = hard blocker
+4. Run `npm run lint:artifact-templates` after saving
 
-1. **Delegate** to `governance-discovery-subagent` — it verifies Azure connectivity, queries
-   ALL effective policy assignments via REST API (including management group-inherited),
-   classifies effects, and returns a structured governance report
-2. **Review the subagent's result** — check Status is COMPLETE (if PARTIAL or FAILED, STOP)
-3. **Integrate findings** — use the Blockers/Warnings/Auto-Remediation tables from the
-   subagent output to populate `04-governance-constraints.md` and
-   `04-governance-constraints.json`
-4. **Adapt plan** — any `Deny` policies are hard blockers; adjust the implementation plan
-
-**Policy Effect Decision Tree:**
-
-| Effect              | Action                                     | Code Generator Action                                    |
-| ------------------- | ------------------------------------------ | -------------------------------------------------------- |
-| `Deny`              | Hard blocker — adapt plan to comply        | MUST set `azurePropertyPath` property to compliant value |
-| `Audit`             | Warning — document, proceed                | Set compliant value where feasible (best effort)         |
-| `DeployIfNotExists` | Azure auto-remediates — note in plan       | Document auto-deployed resource in implementation ref    |
-| `Modify`            | Azure auto-modifies — verify compatibility | Document expected modification — do NOT set conflicting  |
-| `Disabled`          | Ignore                                     | No action required                                       |
-
-Save findings to `agent-output/{project}/04-governance-constraints.md` matching H2 template.
-After saving, run `npm run lint:artifact-templates` and fix any errors for your artifacts.
+**Policy Effect Reference**: `azure-defaults/references/policy-effect-decision-tree.md`
 
 ### Phase 2: AVM-TF Module Verification
 
 For EACH resource in the architecture:
 
-1. Query `terraform/search_modules` to find the AVM-TF module (namespace `Azure`, provider `azurerm`)
-2. If AVM-TF module found → use `terraform/get_module_details` to retrieve variable schema,
-   outputs, and examples; use it as the implementation basis
-3. If no AVM-TF module → plan a raw `azurerm` provider resource and run deprecation checks
-4. Verify the latest module version via `terraform/get_latest_module_version`
-5. Document module source path + version in the implementation plan
+1. `terraform/search_modules` → find AVM-TF module (namespace `Azure`, provider `azurerm`)
+2. If found: `terraform/get_module_details` → variable schema, outputs, examples
+3. If not found: plan raw `azurerm` resource + deprecation checks
+4. `terraform/get_latest_module_version` → pin version; document in plan
 
-**AVM-TF module naming convention**: `Azure/avm-res-{service}-{resource}/azurerm`
-(e.g., `Azure/avm-res-keyvault-vault/azurerm`).
-
-**Fallback if MCP unavailable**: Use the Terraform Registry REST API directly:
-`https://registry.terraform.io/v1/modules/Azure/{module-name}/azurerm`
+**AVM-TF naming**: `Azure/avm-res-{service}-{resource}/azurerm`
+**MCP fallback**: `https://registry.terraform.io/v1/modules/Azure/{module-name}/azurerm`
 
 ### Phase 3: Deprecation & Lifecycle Checks
 
-**Only required for**: Non-AVM resources and custom tier/SKU overrides.
-
-Use deprecation research patterns from azure-defaults skill:
-
-- Check Azure Updates for retirement notices
-- Verify SKU/tier availability in target region
-- Scan for "Classic" / "v1" / "Basic" tier patterns (often deprecated)
-
-If deprecation detected: document alternative, adjust plan.
+Only for non-AVM resources and custom tier/SKU overrides. Check Azure Updates for
+retirement notices, verify SKU availability in target region, scan for Classic/v1/Basic patterns.
 
 ### Phase 3.5: Deployment Strategy Gate (MANDATORY)
 
 > [!CAUTION]
-> This is a **mandatory gate**. You MUST ask the user before generating the
-> implementation plan. Do NOT assume single or phased — ask.
+> You MUST ask the user before generating the plan. Do NOT assume single or phased.
 
-Use `askQuestions` to present the deployment strategy choice:
+Use `askQuestions`:
 
-- **Phased deployment** (recommended) — deploy in logical phases with approval gates
-  between each. Reduces blast radius, isolates failures, enables incremental validation.
-  Recommended for >5 resources or any production/compliance workload.
-  Uses `var.deployment_phase` with `count` conditionals to enable selective deployment.
-- **Single deployment** — deploy all resources in one `terraform apply` operation.
-  Suitable only for small dev/test environments with <5 resources.
+- **Phased** (recommended for >5 resources): Foundation → Security →
+  Data → Compute → Edge. Uses `var.deployment_phase` + `count`
+- **Single**: All resources in one apply. Only for small dev/test (<5 resources)
 
-**Default: Phased** (pre-selected as recommended).
-
-If the user selects phased, also ask for phase grouping preference:
-
-- **Standard** (recommended): Foundation → Security → Data → Compute → Edge/Integration
-- **Custom**: Let the user define phase boundaries
-
-Record the user's choice and use it to structure the `## Deployment Phases` section.
+If phased, also ask: Standard grouping (recommended) or Custom boundaries.
 
 ### Phase 4: Implementation Plan Generation
 
-Generate structured plan with these elements per resource:
+Generate YAML-structured resource specs per resource. Include:
+resource inventory, module structure, dependencies, deployment phases,
+diagrams (`04-dependency-diagram.py/.png` + `04-runtime-diagram.py/.png`),
+naming table, security matrix, backend config template, estimated time.
 
-```yaml
-- resource: "Key Vault"
-  module: "Azure/avm-res-keyvault-vault/azurerm"
-  version: "~> 0.9"
-  sku_name: "standard"
-  dependencies: ["resource_group", "virtual_network"]
-  config:
-    enable_rbac_authorization: true
-    purge_protection_enabled: true
-    soft_delete_retention_days: 90
-  azurePropertyPath: "keyVault.properties.softDeleteRetentionInDays"
-  tags: [Environment, ManagedBy, Project, Owner]
-  naming: "kv-{short}-{env}-{suffix}"
-```
+For Terraform-specific patterns (backend, state locking, provider pin, naming),
+read `terraform-patterns/references/tf-best-practices-examples.md`.
 
-Include:
+### Phase 4.3: Governance Review (1 pass)
 
-- Resource inventory with tiers/SKUs and dependencies
-- Module structure (root module + `modules/` optional)
-- Implementation tasks in dependency order
-- **Deployment Phases** section (from user's Phase 3.5 choice):
-  - If **phased**: group tasks into phases with `var.deployment_phase` values,
-    approval gates, validation criteria, and estimated deploy time per phase
-  - If **single**: note single deployment with one plan gate
-- Python dependency diagram artifact (`04-dependency-diagram.py` + `.png`)
-- Python runtime flow diagram artifact (`04-runtime-diagram.py` + `.png`)
-- Naming conventions table (from azure-defaults CAF + Terraform Conventions sections)
-- Security configuration matrix
-- Azure Storage backend configuration template
-- Estimated implementation time
+Invoke `challenger-review-subagent`: `artifact_type = "governance-constraints"`,
+`review_focus = "comprehensive"`, pass 1. Save to `challenge-findings-governance-constraints.json`.
 
-#### Terraform-Specific Concerns
+### Phase 4.5: Adversarial Plan Review (3 passes)
 
-##### Backend Configuration
-
-Always plan an Azure Storage Account backend:
-
-```hcl
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "{rg-name}"
-    storage_account_name = "{sa-name}"
-    container_name       = "tfstate"
-    key                  = "{project}.terraform.tfstate"
-  }
-}
-```
-
-Note: bootstrap script must create the storage account BEFORE `terraform init`.
-Never plan `terraform { cloud { } }` or `TFE_TOKEN`.
-
-##### State Locking
-
-Azure Blob Storage provides native state locking via blob leases — document this in
-the plan. No additional configuration required.
-
-##### Resource Naming in Terraform
-
-Terraform uses underscores in resource labels: `azurerm_key_vault.this`.
-Follow CAF naming for the actual Azure resource `name` attribute.
-
-##### Provider Requirements
-
-Always pin the `azurerm` provider to a minor version band:
-
-```hcl
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-  }
-  required_version = ">= 1.9"
-}
-```
-
-Use `terraform/get_latest_provider_version` to confirm current stable version.
-
-### Phase 4.3: Governance Constraints Review (1 pass)
-
-After governance discovery completes, invoke `challenger-review-subagent` via `#runSubagent`:
-
-- `artifact_path` = `agent-output/{project}/04-governance-constraints.md`
-- `project_name` = `{project}`
-- `artifact_type` = `governance-constraints`
-- `review_focus` = `comprehensive`
-- `pass_number` = `1`
-- `prior_findings` = `null`
-
-Write result to `agent-output/{project}/challenge-findings-governance-constraints.json`.
-
-### Phase 4.5: Adversarial Plan Review (3 passes — rotating lenses)
-
-After generating the implementation plan, run 3 adversarial passes:
-
-| Pass | `review_focus`             | Lens Description                                            |
-| ---- | -------------------------- | ----------------------------------------------------------- |
-| 1    | `security-governance`      | Policy compliance, identity, network isolation, encryption  |
-| 2    | `architecture-reliability` | WAF balance, SLA feasibility, failure modes, dependencies   |
-| 3    | `cost-feasibility`         | SKU sizing, pricing realism, budget alignment, reservations |
-
-For each pass, invoke `challenger-review-subagent` via `#runSubagent`:
-
-- `artifact_path` = `agent-output/{project}/04-implementation-plan.md`
-- `project_name` = `{project}`
-- `artifact_type` = `implementation-plan`
-- `review_focus` = per-pass value from table above
-- `pass_number` = `1` / `2` / `3`
-- `prior_findings` = `null` for pass 1; **compact prior findings string for passes 2-3** (see below)
-
-Write each result to `agent-output/{project}/challenge-findings-implementation-plan-pass{N}.json`.
-
-> [!IMPORTANT]
-> **Context efficiency — compact prior_findings**
->
-> After writing each pass result to disk, **do NOT keep the full JSON in working context**.
-> Extract only the `compact_for_parent` string from the subagent response and discard the rest.
->
-> For passes 2 and 3, set `prior_findings` to a compact string built from previous
-> `compact_for_parent` values — **not the full JSON objects**:
->
-> ```text
-> prior_findings: "Pass 1: <compact_for_parent>\nPass 2: <compact_for_parent>"
-> ```
+Read `azure-defaults/references/adversarial-review-protocol.md` for lens table.
+Invoke `challenger-review-subagent` 3× with `artifact_type = "implementation-plan"`,
+rotating `review_focus`. Save to `challenge-findings-implementation-plan-pass{N}.json`.
 
 ### Phase 5: Approval Gate
 
-Present plan summary and wait for approval:
+Present summary: resource count, AVM-TF vs raw, governance blockers/warnings,
+deployment strategy, backend, challenger findings. Wait for "approve" before handoff.
 
-```text
-📝 Implementation Plan Complete
+## Boundaries
 
-Resources: {count} | AVM-TF Modules: {count} | Raw azurerm: {count}
-Governance: {blocker_count} blockers, {warning_count} warnings
-Deployment: {Phased (N phases) | Single}
-Backend: Azure Storage Account (Azure Blob State Locking)
-Est. Implementation: {time}
-```
-
-Append challenger summary merging ALL passes:
-
-```text
-⚠️ Adversarial Review Summary (1 governance pass + 3 plan passes)
-  must_fix: {total} | should_fix: {total} | suggestions: {total}
-  Key concerns: {top 2-3 must_fix titles across all passes}
-  Findings:
-    - agent-output/{project}/challenge-findings-governance-constraints.json
-    - agent-output/{project}/challenge-findings-implementation-plan-pass1.json
-    - agent-output/{project}/challenge-findings-implementation-plan-pass2.json
-    - agent-output/{project}/challenge-findings-implementation-plan-pass3.json
-```
-
-```text
-Reply "approve" to proceed to terraform-code, or provide feedback.
-```
+- **Always**: Run governance discovery, verify AVM-TF modules, ask deployment strategy, generate diagrams
+- **Ask first**: Non-standard phase groupings, custom provider versions, deviation from architecture assessment
+- **Never**: Write Terraform code, skip governance, assume deployment strategy, plan HCP/cloud backends
 
 ## Output Files
 
-| File                        | Location                                                | Template                     |
-| --------------------------- | ------------------------------------------------------- | ---------------------------- |
-| Implementation Plan         | `agent-output/{project}/04-implementation-plan.md`      | From azure-artifacts skill   |
-| Governance Constraints      | `agent-output/{project}/04-governance-constraints.md`   | From azure-artifacts skill   |
-| Governance Constraints JSON | `agent-output/{project}/04-governance-constraints.json` | Machine-readable policy data |
-| Dependency Diagram Source   | `agent-output/{project}/04-dependency-diagram.py`       | Python diagrams              |
-| Dependency Diagram Image    | `agent-output/{project}/04-dependency-diagram.png`      | Generated from source        |
-| Runtime Diagram Source      | `agent-output/{project}/04-runtime-diagram.py`          | Python diagrams              |
-| Runtime Diagram Image       | `agent-output/{project}/04-runtime-diagram.png`         | Generated from source        |
+| File                   | Location                                                |
+| ---------------------- | ------------------------------------------------------- |
+| Implementation Plan    | `agent-output/{project}/04-implementation-plan.md`      |
+| Governance Constraints | `agent-output/{project}/04-governance-constraints.md`   |
+| Governance JSON        | `agent-output/{project}/04-governance-constraints.json` |
+| Dependency Diagram     | `agent-output/{project}/04-dependency-diagram.py/.png`  |
+| Runtime Diagram        | `agent-output/{project}/04-runtime-diagram.py/.png`     |
 
 > [!IMPORTANT]
-> `04-governance-constraints.json` is consumed downstream by the Terraform Code Generator
-> (Phase 1.5) and `terraform-review-subagent`. Its completeness directly impacts downstream
-> code quality. Each `Deny` policy MUST include `azurePropertyPath` and `requiredValue` fields
-> to make the JSON machine-actionable.
-
-Include attribution header from the template file (do not hardcode).
+> `04-governance-constraints.json` is consumed by Terraform CodeGen (Phase 1.5) and
+> `terraform-review-subagent`. Each `Deny` policy MUST include `azurePropertyPath` +
+> `requiredValue` to be machine-actionable.
 
 ## Validation Checklist
 
-- [ ] Governance discovery completed via ARG query
-- [ ] AVM-TF availability checked for every resource via `terraform/search_modules`
-- [ ] Provider resource arguments verified via `terraform/search_providers`/`terraform/get_provider_details`
-- [ ] Deprecation checks done for non-AVM / custom tier resources
-- [ ] All resources have naming patterns following CAF conventions
-- [ ] Dependency graph is acyclic and complete
-- [ ] H2 headings match azure-artifacts templates exactly
-- [ ] All 4 required tags listed for every resource
-- [ ] `azurePropertyPath` used (not `bicepPropertyPath`) in plan YAML
-- [ ] Azure Storage backend configuration template included
-- [ ] Security configuration includes managed identity where applicable
+- [ ] Governance discovery completed via REST API + ARG
+- [ ] AVM-TF checked for every resource
+- [ ] Deprecation checks done for non-AVM resources
+- [ ] `azurePropertyPath` used (not `bicepPropertyPath`) in YAML
+- [ ] H2 headings match templates; all 4 required tags per resource
+- [ ] Azure Storage backend template included
+- [ ] Diagrams generated and referenced
 - [ ] Approval gate presented before handoff
-- [ ] `04-implementation-plan.md` and governance artifacts saved to `agent-output/{project}/`
-- [ ] `04-dependency-diagram.py/.png` generated and referenced in plan
-- [ ] `04-runtime-diagram.py/.png` generated and referenced in plan

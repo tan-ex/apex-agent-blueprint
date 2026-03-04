@@ -1,6 +1,9 @@
 ---
 name: golden-principles
-description: Agent-first operating principles adapted from Harness Engineering philosophy. The 10 invariants that govern how agents work in this repository.
+description: >-
+  The 10 agent-first operating principles governing how agents work in this repository.
+  USE FOR: agent behavior rules, operating philosophy, principle lookup, governance invariants.
+  DO NOT USE FOR: Azure infrastructure, code generation, troubleshooting, diagram creation.
 ---
 
 # Golden Principles

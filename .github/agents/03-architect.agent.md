@@ -137,6 +137,19 @@ Verify these are documented — **ask user via `askQuestions` if missing**:
 | Budget     | Approximate monthly budget         | Ask for range              |
 | Scale      | Users, transactions, data volume   | Ask for growth projections |
 
+## Session State Protocol
+
+**Read** `.github/skills/session-resume/SKILL.md` for the full protocol.
+
+- **Context budget**: 2 files at startup (`00-session-state.json` + `01-requirements.md`)
+- **My step**: 2
+- **Sub-step checkpoints**: `phase_1_prereqs` → `phase_2_waf` → `phase_3_cost` → `phase_4_challenger` → `phase_5_artifact`
+- **Resume detection**: Read `00-session-state.json` BEFORE reading skills. If `steps.2.status`
+  is `"in_progress"` with a `sub_step`, skip to that checkpoint (e.g. if `phase_3_cost`,
+  skip WAF assessment re-generation and proceed to cost estimation).
+- **State writes**: Update `00-session-state.json` after each phase. On completion, set
+  `steps.2.status = "complete"` and populate `decisions` with architecture pattern and budget.
+
 ## MANDATORY: Read Skills (After Prerequisites, Before Assessment)
 
 **After prerequisites are confirmed**, read these skills for configuration and template structure:
@@ -276,41 +289,21 @@ Refer to azure-defaults skill for exact `service_name` values.
 ## Adversarial Review — 3-Pass Architecture + 1-Pass Cost Estimate
 
 After generating the assessment and cost estimate, run adversarial reviews.
+Read `azure-defaults/references/adversarial-review-protocol.md` for the
+lens table, compact prior_findings guidance, and invocation template.
 
 ### Architecture Review (3 passes — rotating lenses)
-
-| Pass | `review_focus`             | Lens Description                                            |
-| ---- | -------------------------- | ----------------------------------------------------------- |
-| 1    | `security-governance`      | Policy compliance, identity, network isolation, encryption  |
-| 2    | `architecture-reliability` | WAF balance, SLA feasibility, failure modes, dependencies   |
-| 3    | `cost-feasibility`         | SKU sizing, pricing realism, budget alignment, reservations |
 
 For each pass, invoke `challenger-review-subagent` via `#runSubagent`:
 
 - `artifact_path` = `agent-output/{project}/02-architecture-assessment.md`
 - `project_name` = `{project}`
 - `artifact_type` = `architecture`
-- `review_focus` = per-pass value from table above
+- `review_focus` = per-pass value from protocol lens table
 - `pass_number` = `1` / `2` / `3`
-- `prior_findings` = `null` for pass 1; **compact prior findings string for passes 2-3** (see below)
+- `prior_findings` = `null` for pass 1; compact string for passes 2-3
 
 Write each result to `agent-output/{project}/challenge-findings-architecture-pass{N}.json`.
-
-> [!IMPORTANT]
-> **Context efficiency — compact prior_findings**
->
-> After writing each pass result to disk, **do NOT keep the full JSON in working context**.
-> Extract only the `compact_for_parent` string from the subagent response and discard the rest.
->
-> For passes 2 and 3, set `prior_findings` to a compact multi-line string built from
-> previous `compact_for_parent` values — **not the full JSON objects**:
->
-> ```text
-> prior_findings: "Pass 1: <compact_for_parent>\nPass 2: <compact_for_parent>"
-> ```
->
-> This prevents each subagent call from re-injecting thousands of tokens of prior findings
-> into the parent context. The full detail is already saved to disk.
 
 ### Cost Estimate Review (1 pass)
 
@@ -368,6 +361,12 @@ Reply "approve" to proceed to {iac}-plan, or provide feedback.
 | Cost Estimate  | `agent-output/{project}/03-des-cost-estimate.md`       | From azure-artifacts skill |
 
 Include attribution header from the template file (do not hardcode).
+
+## Boundaries
+
+- **Always**: Evaluate against WAF pillars, generate cost estimates, document architecture decisions
+- **Ask first**: Non-standard SKU/tier selections, deviation from Well-Architected recommendations
+- **Never**: Generate IaC code, skip WAF evaluation, deploy infrastructure
 
 ## Validation Checklist
 

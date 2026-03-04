@@ -2,9 +2,9 @@
 /**
  * H2 Heading Sync Validator
  *
- * Ensures the three sources of truth for artifact H2 headings stay in sync:
- *   1. SKILL.md fenced code blocks (what agents read)
- *   2. azure-artifacts.instructions.md fenced code blocks (auto-applied instructions)
+ * Ensures the sources of truth for artifact H2 headings stay in sync:
+ *   1. SKILL.md + references/ fenced code blocks (what agents read)
+ *   2. azure-artifacts.instructions.md fenced code blocks (optional — checked when present)
  *   3. ARTIFACT_HEADINGS in validate-artifact-templates.mjs (what the validator enforces)
  *
  * @example
@@ -12,8 +12,10 @@
  */
 
 import fs from "node:fs";
+import path from "node:path";
 
 const SKILL_PATH = ".github/skills/azure-artifacts/SKILL.md";
+const SKILL_REFS_DIR = ".github/skills/azure-artifacts/references";
 const H2_REF_PATH = ".github/instructions/azure-artifacts.instructions.md";
 const VALIDATOR_PATH = "scripts/validate-artifact-templates.mjs";
 
@@ -146,6 +148,9 @@ function compareHeadings(artifactName, sourceA, sourceB, nameA, nameB) {
     if (inBNotA.length > 0) {
       console.log(`  In ${nameB} but not ${nameA}: ${inBNotA.join(", ")}`);
     }
+    console.log(
+      `  Fix: Align headings across sources. SKILL.md templates are the source of truth.`,
+    );
     errors++;
     return;
   }
@@ -154,6 +159,9 @@ function compareHeadings(artifactName, sourceA, sourceB, nameA, nameB) {
     if (a[i] !== b[i]) {
       console.log(
         `::error::${artifactName}: heading mismatch at position ${i + 1} — ${nameA}="${a[i]}" vs ${nameB}="${b[i]}"`,
+      );
+      console.log(
+        `  Fix: Update the divergent heading to match. SKILL.md templates are the source of truth.`,
       );
       errors++;
       return;
@@ -164,21 +172,50 @@ function compareHeadings(artifactName, sourceA, sourceB, nameA, nameB) {
 function main() {
   console.log("🔍 H2 Heading Sync Validator\n");
 
-  if (
-    !fs.existsSync(SKILL_PATH) ||
-    !fs.existsSync(H2_REF_PATH) ||
-    !fs.existsSync(VALIDATOR_PATH)
-  ) {
-    console.log("::error::One or more source files not found");
+  const missing = [];
+  if (!fs.existsSync(SKILL_PATH)) missing.push(SKILL_PATH);
+  if (!fs.existsSync(VALIDATOR_PATH)) missing.push(VALIDATOR_PATH);
+  if (missing.length > 0) {
+    for (const f of missing) {
+      console.log(`::error::Missing source file: ${f}`);
+    }
+    console.log(
+      "  Fix: Ensure all H2 source files exist. Run 'git status' to check for missing files.",
+    );
     process.exit(1);
   }
 
+  // H2_REF_PATH is optional — only compared when present
+  const h2RefExists = fs.existsSync(H2_REF_PATH);
+  if (!h2RefExists) {
+    console.log(`  ⚠️  ${H2_REF_PATH} not found — skipping instruction-file comparison`);
+  }
+
   const skillHeadings = parseMarkdownH2Blocks(readText(SKILL_PATH));
-  const h2RefHeadings = parseMarkdownH2Blocks(readText(H2_REF_PATH));
+
+  // Also parse reference files under the skill's references/ directory
+  if (fs.existsSync(SKILL_REFS_DIR)) {
+    const refFiles = fs
+      .readdirSync(SKILL_REFS_DIR)
+      .filter((f) => f.endsWith(".md"));
+    for (const refFile of refFiles) {
+      const refPath = path.join(SKILL_REFS_DIR, refFile);
+      const refHeadings = parseMarkdownH2Blocks(readText(refPath));
+      for (const [key, value] of refHeadings) {
+        if (!skillHeadings.has(key)) {
+          skillHeadings.set(key, value);
+        }
+      }
+    }
+  }
+
+  const h2RefHeadings = h2RefExists
+    ? parseMarkdownH2Blocks(readText(H2_REF_PATH))
+    : new Map();
   const validatorHeadings = parseValidatorHeadings(readText(VALIDATOR_PATH));
 
   console.log(
-    `Sources: SKILL.md (${skillHeadings.size}), H2-reference (${h2RefHeadings.size}), Validator (${validatorHeadings.size})\n`,
+    `Sources: SKILL.md + references/ (${skillHeadings.size}), H2-reference (${h2RefHeadings.size}${h2RefExists ? "" : " — skipped"}), Validator (${validatorHeadings.size})\n`,
   );
 
   for (const artifactName of ARTIFACT_NAMES) {
@@ -187,24 +224,31 @@ function main() {
     const validator = validatorHeadings.get(artifactName);
 
     if (!skill) {
-      console.log(`::error::${artifactName}: missing from SKILL.md`);
-      errors++;
-      continue;
-    }
-    if (!h2Ref) {
-      console.log(`::error::${artifactName}: missing from azure-artifacts`);
+      console.log(
+        `::error file=${SKILL_PATH}::${artifactName}: missing from SKILL.md + references/`,
+      );
+      console.log(
+        `  Fix: Add a '### ${artifactName}' section with H2 headings in a fenced code block to ${SKILL_PATH} or a file in ${SKILL_REFS_DIR}/`,
+      );
       errors++;
       continue;
     }
     if (!validator) {
       console.log(
-        `::error::${artifactName}: missing from validator ARTIFACT_HEADINGS`,
+        `::error file=${VALIDATOR_PATH}::${artifactName}: missing from ARTIFACT_HEADINGS`,
+      );
+      console.log(
+        `  Fix: Add a "${artifactName}": ["## ...", ...] entry to the ARTIFACT_HEADINGS object in ${VALIDATOR_PATH}`,
       );
       errors++;
       continue;
     }
 
-    compareHeadings(artifactName, skill, h2Ref, "SKILL.md", "H2-reference");
+    // H2-reference (instructions file) is optional — headings may live in
+    // SKILL.md references instead. Only compare when present.
+    if (h2Ref) {
+      compareHeadings(artifactName, skill, h2Ref, "SKILL.md", "H2-reference");
+    }
     compareHeadings(artifactName, skill, validator, "SKILL.md", "Validator");
   }
 

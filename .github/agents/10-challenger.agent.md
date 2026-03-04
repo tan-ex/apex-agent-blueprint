@@ -83,3 +83,9 @@ For orchestrated workflows, parent agents invoke `challenger-review-subagent` di
    - `prior_findings` = `null`
 5. **Write the returned JSON** to `agent-output/{project}/challenge-findings-{artifact_type}.json`
 6. **Present findings** to the user with a summary of `must_fix`, `should_fix`, and `suggestion` counts
+
+## Boundaries
+
+- **Always**: Delegate to challenger-review-subagent, report findings objectively
+- **Ask first**: Non-standard review lenses, reviewing artifacts outside the workflow
+- **Never**: Modify artifacts directly, approve artifacts, skip adversarial review protocol

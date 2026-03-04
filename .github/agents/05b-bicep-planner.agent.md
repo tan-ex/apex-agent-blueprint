@@ -107,79 +107,61 @@ These skills are your single source of truth. Do NOT use hardcoded values.
 
 ## DO / DON'T
 
-### DO
-
-- ✅ Verify Azure connectivity (`az account show`) FIRST — governance is a hard gate
-- ✅ Use REST API for policy discovery (includes management group-inherited policies)
-- ✅ Validate REST API count matches Azure Portal (Policy > Assignments) total
-- ✅ Run governance discovery via REST API + ARG BEFORE planning (see azure-defaults skill)
-- ✅ Check AVM availability for EVERY resource via `mcp_bicep_list_avm_metadata`
-- ✅ Use AVM module defaults for SKUs — add deprecation research only for overrides
-- ✅ Check service deprecation status for non-AVM / custom SKU selections
-- ✅ Include governance constraints in the implementation plan
-- ✅ Define tasks as YAML-structured specs (resource, module, dependencies, config)
-- ✅ Generate both `04-implementation-plan.md` and `04-governance-constraints.md`
-- ✅ Auto-generate Step 4 diagrams in the same run:
-  - `04-dependency-diagram.py` + `04-dependency-diagram.png`
-  - `04-runtime-diagram.py` + `04-runtime-diagram.png`
-- ✅ Match H2 headings from azure-artifacts skill exactly
-- ✅ Update `agent-output/{project}/README.md` — mark Step 4 complete, add your artifacts (see azure-artifacts skill)
-- ✅ Ask user for deployment strategy (phased vs single) — MANDATORY GATE
-- ✅ Default recommendation: phased deployment (especially for >5 resources)
-- ✅ Wait for user approval before handoff to bicep-code
-
-### DON'T
-
-- ❌ Write ANY Bicep code — this agent plans, bicep-code implements
-- ❌ Skip governance discovery — this is a HARD GATE, not optional
-- ❌ Generate the implementation plan before asking the user about deployment strategy (Phase 3.5 `askQuestions` is mandatory)
-- ❌ Use `az policy assignment list` alone — it misses management group-inherited policies
-- ❌ Proceed with incomplete policy data (if REST API fails, STOP)
-- ❌ Assume SKUs are valid without checking deprecation status
-- ❌ Hardcode SKUs without AVM verification or live deprecation research
-- ❌ Proceed to bicep-code without explicit user approval
-- ❌ Add H2 headings not in the template (use H3 inside nearest H2)
-- ❌ Ignore policy `effect` field — `Deny` = blocker, `Audit` = warning only
-- ❌ Generate governance constraints from best-practice assumptions
+| DO                                                                             | DON'T                                                        |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| Verify Azure connectivity (`az account show`) FIRST                            | Write ANY Bicep code — this agent plans only                 |
+| Use REST API for policy discovery (includes inherited policies)                | Skip governance discovery — **HARD GATE**                    |
+| Validate REST API count matches Portal total                                   | Generate plan before asking deployment strategy              |
+| Run governance discovery via REST API + ARG BEFORE planning                    | Use `az policy assignment list` alone (misses inherited)     |
+| Check AVM via `mcp_bicep_list_avm_metadata` for every resource                 | Proceed with incomplete policy data — STOP if REST fails     |
+| Use AVM defaults for SKUs; deprecation research only for overrides             | Assume SKUs valid without deprecation checks                 |
+| Check deprecation for non-AVM / custom SKU selections                          | Hardcode SKUs without AVM verification                       |
+| Include governance constraints in the plan                                     | Proceed to bicep-code without user approval                  |
+| Define tasks as YAML-structured specs                                          | Add H2 headings not in the template                          |
+| Generate `04-implementation-plan.md` and `04-governance-constraints.md`        | Ignore policy `effect` — `Deny` = blocker, `Audit` = warning |
+| Auto-generate `04-dependency-diagram.py/.png` and `04-runtime-diagram.py/.png` | Generate governance from best-practice assumptions           |
+| Match H2 headings from azure-artifacts skill exactly                           |                                                              |
+| Update `agent-output/{project}/README.md` — mark Step 4 complete               |                                                              |
+| Ask user for deployment strategy — **MANDATORY GATE**                          |                                                              |
+| Default: phased deployment (>5 resources). Wait for approval before handoff    |                                                              |
 
 ## Prerequisites Check
 
-Before starting, validate `02-architecture-assessment.md` exists in `agent-output/{project}/`.
+Validate `02-architecture-assessment.md` exists in `agent-output/{project}/`.
 If missing, STOP and request handoff to Architect agent.
+Read it for: resource list, SKU recommendations, WAF scores, architecture decisions, compliance requirements.
 
-Read `02-architecture-assessment.md` for: resource list, SKU recommendations, WAF scores,
-architecture decisions, and compliance requirements.
+## Session State Protocol
+
+**Read** `.github/skills/session-resume/SKILL.md` for the full protocol.
+
+- **Context budget**: 2 files at startup (`00-session-state.json` + `02-architecture-assessment.md`)
+- **My step**: 4
+- **Sub-step checkpoints**: `phase_1_governance` → `phase_2_avm` →
+  `phase_3_plan` → `phase_3.5_strategy` → `phase_4_diagrams` →
+  `phase_5_challenger` → `phase_6_artifact`
+- **Resume**: Read `00-session-state.json` first. If `steps.4.status` is `"in_progress"`,
+  skip to the saved `sub_step` checkpoint.
+- **State writes**: Update after each phase. On completion, set `steps.4.status = "complete"`
+  and populate `decisions.deployment_strategy`.
 
 ## Core Workflow
 
 ### Phase 1: Governance Discovery (MANDATORY GATE)
 
 > [!CAUTION]
-> This is a **hard gate**. If governance discovery fails, STOP and inform the user.
-> Do NOT proceed to Phase 2 with incomplete policy data.
+> **Hard gate.** If governance discovery fails, STOP. Do NOT proceed with incomplete policy data.
 
-Delegate governance discovery to `governance-discovery-subagent`:
+1. **Delegate** to `governance-discovery-subagent` — verifies Azure connectivity, queries ALL
+   effective policy assignments via REST API (including management group-inherited), classifies effects
+2. **Review result** — Status must be COMPLETE (if PARTIAL or FAILED, STOP)
+3. **Integrate findings** — populate `04-governance-constraints.md` and `.json` from subagent output
+4. **Adapt plan** — `Deny` policies are hard blockers; adjust accordingly
 
-1. **Delegate** to `governance-discovery-subagent` — it verifies Azure connectivity, queries ALL
-   effective policy assignments via REST API (including management group-inherited), classifies
-   effects, and returns a structured governance report
-2. **Review the subagent's result** — check Status is COMPLETE (if PARTIAL or FAILED, STOP)
-3. **Integrate findings** — use the Blockers/Warnings/Auto-Remediation tables from the subagent
-   output to populate `04-governance-constraints.md` and `04-governance-constraints.json`
-4. **Adapt plan** — any `Deny` policies are hard blockers; adjust the implementation plan accordingly
+**Policy effects:** Read `azure-defaults/references/policy-effect-decision-tree.md`.
 
-**Policy Effect Decision Tree:**
-
-| Effect              | Action                                     | Code Generator Action                                   |
-| ------------------- | ------------------------------------------ | ------------------------------------------------------- |
-| `Deny`              | Hard blocker — adapt plan to comply        | MUST set property to compliant value                    |
-| `Audit`             | Warning — document, proceed                | Set compliant value where feasible (best effort)        |
-| `DeployIfNotExists` | Azure auto-remediates — note in plan       | Document auto-deployed resource in implementation ref   |
-| `Modify`            | Azure auto-modifies — verify compatibility | Document expected modification — do NOT set conflicting |
-| `Disabled`          | Ignore                                     | No action required                                      |
-
-Save findings to `agent-output/{project}/04-governance-constraints.md` matching H2 template.
-After saving, run `npm run lint:artifact-templates` and fix any errors for your artifacts.
+Save to `agent-output/{project}/04-governance-constraints.md` matching H2 template.
+After saving, run `npm run lint:artifact-templates` and fix any errors.
 
 ### Phase 2: AVM Module Verification
 
@@ -192,171 +174,80 @@ For EACH resource in the architecture:
 
 ### Phase 3: Deprecation & Lifecycle Checks
 
-**Only required for**: Non-AVM resources and custom SKU overrides.
-
-Use deprecation research patterns from azure-defaults skill:
-
-- Check Azure Updates for retirement notices
-- Verify SKU availability in target region
-- Scan for "Classic" / "v1" patterns
-
+**Only for** non-AVM resources and custom SKU overrides.
+Use deprecation patterns from azure-defaults skill (Azure Updates, regional SKU availability, Classic/v1).
 If deprecation detected: document alternative, adjust plan.
 
 ### Phase 3.5: Deployment Strategy Gate (MANDATORY)
 
 > [!CAUTION]
-> This is a **mandatory gate**. You MUST ask the user before generating
-> the implementation plan. Do NOT assume single or phased — ask.
+> **Mandatory gate.** Ask the user BEFORE generating the plan. Do NOT assume single or phased.
 
-Use `askQuestions` to present the deployment strategy choice:
+Use `askQuestions` to present:
 
-- **Phased deployment** (recommended) — deploy in logical phases with
-  approval gates between each. Reduces blast radius, isolates failures,
-  enables incremental validation. Recommended for >5 resources or any
-  production/compliance workload.
-- **Single deployment** — deploy all resources in one operation.
-  Suitable only for small dev/test environments with <5 resources.
+- **Phased** (recommended, pre-selected) — logical phases with approval gates. For >5 resources or production/compliance.
+- **Single** — one operation. Only for small dev/test (<5 resources).
 
-**Default: Phased** (pre-selected as recommended).
-
-If the user selects phased, also ask for phase grouping preference:
-
-- **Standard** (recommended): Foundation → Security → Data → Compute →
-  Edge/Integration
-- **Custom**: Let the user define phase boundaries
-
-Record the user's choice and use it to structure the `## Deployment
-Phases` section of the implementation plan.
+If phased, ask grouping: **Standard** (Foundation → Security → Data → Compute → Edge) or **Custom**.
+Record choice for `## Deployment Phases` section.
 
 ### Phase 4: Implementation Plan Generation
 
-Generate structured plan with these elements per resource:
+Generate structured plan with YAML specs per resource (resource, module, SKU, dependencies, config, tags, naming).
 
-```yaml
-- resource: "Key Vault"
-  module: "br/public:avm/res/key-vault/vault:0.11.0"
-  sku: "Standard"
-  dependencies: ["resource-group"]
-  config:
-    enableRbacAuthorization: true
-    enablePurgeProtection: true
-    softDeleteRetentionInDays: 90
-  tags: [Environment, ManagedBy, Project, Owner] # baseline — governance may add more
-  naming: "kv-{short}-{env}-{suffix}"
-```
+Include: resource inventory, module structure (`main.bicep` + `modules/`), tasks in dependency order,
+deployment phases (from Phase 3.5 choice), diagram artifacts (`04-dependency-diagram.py/.png`,
+`04-runtime-diagram.py/.png`), naming conventions table, security config matrix, estimated time.
 
-Include:
+### Phase 4.3–4.5: Adversarial Review (1 governance + 3 plan passes)
 
-- Resource inventory with SKUs and dependencies
-- Module structure (`main.bicep` + `modules/`)
-- Implementation tasks in dependency order
-- **Deployment Phases** section (from user's Phase 3.5 choice):
-  - If **phased**: group tasks into phases with approval gates,
-    validation criteria, and estimated deploy time per phase
-  - If **single**: note single deployment with one what-if gate
-- Python dependency diagram artifact (`04-dependency-diagram.py` + `.png`)
-- Python runtime flow diagram artifact (`04-runtime-diagram.py` + `.png`)
-- Naming conventions table (from azure-defaults CAF section)
-- Security configuration matrix
-- Estimated implementation time
+Read `azure-defaults/references/adversarial-review-protocol.md` for lens table, prior_findings format, and invocation template.
 
-### Phase 4.3: Governance Constraints Review (1 pass)
+- **Phase 4.3**: Invoke `challenger-review-subagent` on
+  `04-governance-constraints.md` (`review_focus=comprehensive`, 1 pass)
+- **Phase 4.5**: Invoke `challenger-review-subagent` on `04-implementation-plan.md` (3 passes, rotating lenses per protocol)
 
-After governance discovery completes, invoke `challenger-review-subagent` via `#runSubagent`:
-
-- `artifact_path` = `agent-output/{project}/04-governance-constraints.md`
-- `project_name` = `{project}`
-- `artifact_type` = `governance-constraints`
-- `review_focus` = `comprehensive`
-- `pass_number` = `1`
-- `prior_findings` = `null`
-
-Write result to `agent-output/{project}/challenge-findings-governance-constraints.json`.
-
-### Phase 4.5: Adversarial Plan Review (3 passes — rotating lenses)
-
-After generating the implementation plan, run 3 adversarial passes:
-
-| Pass | `review_focus`             | Lens Description                                            |
-| ---- | -------------------------- | ----------------------------------------------------------- |
-| 1    | `security-governance`      | Policy compliance, identity, network isolation, encryption  |
-| 2    | `architecture-reliability` | WAF balance, SLA feasibility, failure modes, dependencies   |
-| 3    | `cost-feasibility`         | SKU sizing, pricing realism, budget alignment, reservations |
-
-For each pass, invoke `challenger-review-subagent` via `#runSubagent`:
-
-- `artifact_path` = `agent-output/{project}/04-implementation-plan.md`
-- `project_name` = `{project}`
-- `artifact_type` = `implementation-plan`
-- `review_focus` = per-pass value from table above
-- `pass_number` = `1` / `2` / `3`
-- `prior_findings` = `null` for pass 1; **compact prior findings string for passes 2-3** (see below)
-
-Write each result to `agent-output/{project}/challenge-findings-implementation-plan-pass{N}.json`.
-
-> [!IMPORTANT]
-> **Context efficiency — compact prior_findings**
->
-> After writing each pass result to disk, **do NOT keep the full JSON in working context**.
-> Extract only the `compact_for_parent` string from the subagent response and discard the rest.
->
-> For passes 2 and 3, set `prior_findings` to a compact string built from previous
-> `compact_for_parent` values — **not the full JSON objects**:
->
-> ```text
-> prior_findings: "Pass 1: <compact_for_parent>\nPass 2: <compact_for_parent>"
-> ```
+Write results to `agent-output/{project}/challenge-findings-{artifact}-pass{N}.json`.
 
 ### Phase 5: Approval Gate
 
-Present plan summary and wait for approval:
+Present summary and wait for approval:
 
 ```text
 📝 Implementation Plan Complete
+Resources: {count} | AVM: {count} | Custom: {count}
+Governance: {blockers} blockers, {warnings} warnings
+Deployment: {Phased (N phases) | Single} | Est: {time}
 
-Resources: {count} | AVM Modules: {count} | Custom: {count}
-Governance: {blocker_count} blockers, {warning_count} warnings
-Deployment: {Phased (N phases) | Single}
-Est. Implementation: {time}
-```
+⚠️ Adversarial Review (1 governance + 3 plan passes)
+  must_fix: {n} | should_fix: {n} | suggestions: {n}
+  Key concerns: {top 2-3 must_fix titles}
 
-Append challenger summary merging ALL passes:
-
-```text
-⚠️ Adversarial Review Summary (1 governance pass + 3 plan passes)
-  must_fix: {total} | should_fix: {total} | suggestions: {total}
-  Key concerns: {top 2-3 must_fix titles across all passes}
-  Findings:
-    - agent-output/{project}/challenge-findings-governance-constraints.json
-    - agent-output/{project}/challenge-findings-implementation-plan-pass1.json
-    - agent-output/{project}/challenge-findings-implementation-plan-pass2.json
-    - agent-output/{project}/challenge-findings-implementation-plan-pass3.json
-```
-
-```text
 Reply "approve" to proceed to bicep-code, or provide feedback.
 ```
 
 ## Output Files
 
-| File                        | Location                                                | Template                     |
-| --------------------------- | ------------------------------------------------------- | ---------------------------- |
-| Implementation Plan         | `agent-output/{project}/04-implementation-plan.md`      | From azure-artifacts skill   |
-| Governance Constraints      | `agent-output/{project}/04-governance-constraints.md`   | From azure-artifacts skill   |
-| Governance Constraints JSON | `agent-output/{project}/04-governance-constraints.json` | Machine-readable policy data |
+| File                   | Location                                                   | Template                     |
+| ---------------------- | ---------------------------------------------------------- | ---------------------------- |
+| Implementation Plan    | `agent-output/{project}/04-implementation-plan.md`         | From azure-artifacts skill   |
+| Governance Constraints | `agent-output/{project}/04-governance-constraints.md`      | From azure-artifacts skill   |
+| Governance JSON        | `agent-output/{project}/04-governance-constraints.json`    | Machine-readable policy data |
+| Dependency Diagram     | `agent-output/{project}/04-dependency-diagram.py` + `.png` | Python diagrams              |
+| Runtime Diagram        | `agent-output/{project}/04-runtime-diagram.py` + `.png`    | Python diagrams              |
 
 > [!IMPORTANT]
-> `04-governance-constraints.json` is consumed downstream by the Code Generator (Phase 1.5)
-> and the `bicep-review-subagent` (Governance Compliance checklist). Its completeness directly
-> impacts downstream code quality. Each `Deny` policy MUST include `azurePropertyPath` (preferred,
-> IaC-agnostic REST API path) AND `bicepPropertyPath` (Bicep-specific fallback) plus `requiredValue`
-> (not just the policy display name) to make the JSON machine-actionable by both Bicep and Terraform agents.
-> | Dependency Diagram Source | `agent-output/{project}/04-dependency-diagram.py` | Python diagrams |
-> | Dependency Diagram Image | `agent-output/{project}/04-dependency-diagram.png` | Generated from source |
-> | Runtime Diagram Source | `agent-output/{project}/04-runtime-diagram.py` | Python diagrams |
-> | Runtime Diagram Image | `agent-output/{project}/04-runtime-diagram.png` | Generated from source |
+> `04-governance-constraints.json` is consumed downstream by Code Generator (Phase 1.5) and
+> `bicep-review-subagent`. Each `Deny` policy MUST include `azurePropertyPath` (preferred) AND
+> `bicepPropertyPath` (fallback) plus `requiredValue` to be machine-actionable.
 
 Include attribution header from the template file (do not hardcode).
+
+## Boundaries
+
+- **Always**: Run governance discovery, verify AVM modules, ask deployment strategy, generate diagrams
+- **Ask first**: Non-standard phase groupings, deviation from architecture assessment
+- **Never**: Write Bicep/Terraform code, skip governance, assume deployment strategy
 
 ## Validation Checklist
 

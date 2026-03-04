@@ -115,8 +115,9 @@ check(
   fileContains(plannerPath, "requiredValue"),
 );
 check(
-  "Has Code Generator Action column in policy effect table",
-  fileContains(plannerPath, "Code Generator Action"),
+  "Has policy effect decision tree (inline or reference)",
+  fileContains(plannerPath, "Code Generator Action") ||
+    fileContains(plannerPath, "policy-effect-decision-tree"),
 );
 
 // 4. bicep-policy-compliance.instructions.md exists and is valid
@@ -129,8 +130,8 @@ check(
   fileContains(policyInstrPath, "**/*.bicep"),
 );
 check(
-  "Has correct applyTo scope including *.agent.md",
-  fileContains(policyInstrPath, "**/*.agent.md"),
+  "applyTo no longer includes agent.md files",
+  !fileContains(policyInstrPath, "**/*.agent.md"),
 );
 check(
   'States "Azure Policy always wins"',
@@ -144,7 +145,22 @@ check(
 // 5. Governance discovery instructions include downstream enforcement
 console.log("\n📄 governance-discovery.instructions.md");
 const govDiscPath = ".github/instructions/governance-discovery.instructions.md";
-check("applyTo includes *.bicep", fileContains(govDiscPath, "**/*.bicep"));
+check(
+  "applyTo covers governance artifacts",
+  (() => {
+    const content = fs.readFileSync(
+      path.resolve(process.cwd(), govDiscPath),
+      "utf-8",
+    );
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) return false;
+    const fm = fmMatch[1];
+    return (
+      fm.includes("04-governance-constraints.md") ||
+      fm.includes("04-governance-constraints")
+    );
+  })(),
+);
 check(
   "Has Downstream Enforcement section",
   fileContains(govDiscPath, "## Downstream Enforcement"),

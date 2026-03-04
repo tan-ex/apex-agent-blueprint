@@ -1,5 +1,5 @@
 ---
-applyTo: "**/04-governance-constraints.md, **/04-governance-constraints.json, **/*.bicep, **/*.tf"
+applyTo: "**/04-governance-constraints.md, **/04-governance-constraints.json"
 description: "MANDATORY Azure Policy discovery requirements for governance constraints"
 ---
 
