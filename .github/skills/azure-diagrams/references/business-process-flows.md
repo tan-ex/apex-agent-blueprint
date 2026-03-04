@@ -1,3 +1,5 @@
+<!-- ref:business-process-flows-v1 -->
+
 # Business Process Flow Diagrams
 
 Generate professional business process flow diagrams showing user actions, system steps, and outcomes.
@@ -123,15 +125,15 @@ dot.render('process-comparison', cleanup=True)
 
 ### Style Guide
 
-| Element | Shape | Color | Use For |
-|---------|-------|-------|---------|
-| Start/End | ellipse | Green (#4CAF50) | Process boundaries |
-| Process | rounded box | Blue (#2196F3) | System/automated steps |
-| Decision | diamond | Amber (#FFC107) | Yes/No branching |
-| User Action | box | Purple (#9C27B0) | Manual user steps |
-| System | box | Cyan (#00BCD4) | Backend processing |
-| Document | note | Yellow (#FFEB3B) | Document/form |
-| Data/Storage | cylinder | Orange (#FF5722) | Database/storage |
+| Element      | Shape       | Color            | Use For                |
+| ------------ | ----------- | ---------------- | ---------------------- |
+| Start/End    | ellipse     | Green (#4CAF50)  | Process boundaries     |
+| Process      | rounded box | Blue (#2196F3)   | System/automated steps |
+| Decision     | diamond     | Amber (#FFC107)  | Yes/No branching       |
+| User Action  | box         | Purple (#9C27B0) | Manual user steps      |
+| System       | box         | Cyan (#00BCD4)   | Backend processing     |
+| Document     | note        | Yellow (#FFEB3B) | Document/form          |
+| Data/Storage | cylinder    | Orange (#FF5722) | Database/storage       |
 
 ---
 
@@ -157,25 +159,25 @@ from diagrams.programming.flowchart import (
 
 # Example: Document Processing Workflow
 with Diagram("Document Processing Flow", show=False, filename="process-flow", direction="TB"):
-    
+
     start = StartEnd("Start")
-    
+
     with Cluster("User Actions"):
         user = Users("User")
         scan = ManualInput("Scan Document")
-    
+
     with Cluster("System Processing"):
         validate = Decision("Valid\nFormat?")
         ocr = Action("OCR\nExtraction")
         classify = Action("Auto\nClassification")
         store = Database("Store in\nDocument DB")
-    
+
     with Cluster("Outcomes"):
         success = Display("Document\nIndexed")
         error = Display("Error\nNotification")
-    
+
     end = StartEnd("End")
-    
+
     start >> user >> scan >> validate
     validate >> Edge(label="Yes") >> ocr >> classify >> store >> success >> end
     validate >> Edge(label="No") >> error >> end
@@ -220,21 +222,21 @@ def create_process_flow(title, filename):
     dot = graphviz.Digraph(title, filename=filename, format='png')
     dot.attr(rankdir='TB', splines='spline')
     dot.attr('node', shape='box', style='rounded,filled', fillcolor='lightblue')
-    
+
     # Start/End nodes
     dot.node('start', 'Start', shape='ellipse', fillcolor='lightgreen')
     dot.node('end', 'End', shape='ellipse', fillcolor='lightcoral')
-    
+
     # Decision nodes
     dot.node('decision1', 'Valid?', shape='diamond', fillcolor='lightyellow')
-    
+
     # Process nodes
     dot.node('step1', 'Receive\nDocument')
     dot.node('step2', 'Validate\nFormat')
     dot.node('step3', 'Process')
     dot.node('step4', 'Store')
     dot.node('error', 'Handle\nError', fillcolor='lightcoral')
-    
+
     # Edges
     dot.edge('start', 'step1')
     dot.edge('step1', 'step2')
@@ -244,7 +246,7 @@ def create_process_flow(title, filename):
     dot.edge('step3', 'step4')
     dot.edge('step4', 'end')
     dot.edge('error', 'end')
-    
+
     dot.render(cleanup=True)
     return f"{filename}.png"
 
@@ -255,11 +257,13 @@ create_process_flow("Document Flow", "document-flow")
 ## Common Process Flow Patterns
 
 ### Pattern 1: Linear Process
+
 ```python
 start >> step1 >> step2 >> step3 >> end
 ```
 
 ### Pattern 2: Decision Branch
+
 ```python
 step >> decision
 decision >> Edge(label="Yes") >> path_a >> end
@@ -267,11 +271,13 @@ decision >> Edge(label="No") >> path_b >> end
 ```
 
 ### Pattern 3: Parallel Processing
+
 ```python
 step >> [parallel_a, parallel_b, parallel_c] >> merge >> next_step
 ```
 
 ### Pattern 4: Loop/Retry
+
 ```python
 process >> decision
 decision >> Edge(label="Success") >> next
@@ -279,6 +285,7 @@ decision >> Edge(label="Retry") >> process
 ```
 
 ### Pattern 5: Swimlanes (Actors)
+
 ```python
 with Cluster("Customer"):
     customer_actions = [Action("Submit"), Action("Review")]
@@ -293,6 +300,7 @@ with Cluster("Admin"):
 ## Styling Guide
 
 ### Node Shapes by Type
+
 - **Start/End**: Ellipse (rounded)
 - **Process/Action**: Rectangle with rounded corners
 - **Decision**: Diamond
@@ -301,6 +309,7 @@ with Cluster("Admin"):
 - **Delay/Wait**: Half-circle
 
 ### Color Coding
+
 ```python
 # Suggested colors
 USER_ACTION = "#E3F2FD"      # Light blue
@@ -333,6 +342,7 @@ When converting ASCII diagrams like:
 ```
 
 Map to:
+
 1. Identify actors/swimlanes (User, System)
 2. Identify decision points (diamonds in ASCII)
 3. Identify process steps (boxes)

@@ -227,3 +227,16 @@ Review column = adversarial passes by `challenger-review-subagent` (3x = rotatin
 - SQL databases: Azure AD-only authentication
 - Production environments: disable public network access on data services
 - Always check `04-governance-constraints.md` for subscription-level Azure Policy requirements
+
+## Quarterly Context Audit
+
+Run every 3 months to prevent context bloat regression:
+
+1. `npm run lint:skill-size` — check for skills >200 lines without references
+2. `npm run lint:agent-body-size` — check for agents >350 lines
+3. `npm run lint:glob-audit` — check for broad wildcards on large files
+4. `npm run lint:skill-references` — check for orphaned reference files
+5. `npm run lint:orphaned-content` — check for unreferenced skills
+6. `npm run lint:docs-freshness` — check docs counts and links
+7. Review `QUALITY_SCORE.md` and update if metrics changed
+8. Run `npm run snapshot:baseline` to capture current state for future diffs

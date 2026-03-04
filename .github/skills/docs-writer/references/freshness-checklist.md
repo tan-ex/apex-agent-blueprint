@@ -1,3 +1,5 @@
+<!-- ref:freshness-checklist-v1 -->
+
 # Freshness Checklist
 
 > For use by the `docs-writer` skill. Defines audit targets and auto-fix

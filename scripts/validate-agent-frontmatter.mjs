@@ -32,6 +32,9 @@ const RECOMMENDED_FIELDS = ["agents", "model"];
 let errors = 0;
 let warnings = 0;
 
+// Block scalar check — must run on raw content before parsing
+const BLOCK_SCALAR_PATTERN = /^description:\s*[>|][-\s]*$/m;
+
 /**
  * Validate a single agent file
  */
@@ -39,6 +42,20 @@ function validateAgent(filePath, isSubagent) {
   const content = fs.readFileSync(filePath, "utf8");
   const frontmatter = parseFrontmatter(content);
   const relativePath = path.relative(process.cwd(), filePath);
+
+  // Check for block scalar description BEFORE parsing (parser swallows it)
+  if (BLOCK_SCALAR_PATTERN.test(content)) {
+    console.error(
+      `❌ ${relativePath}: description uses a YAML block scalar (>, >-, | or |-)`,
+    );
+    console.error(
+      `  Fix: Replace with a single-line description: "..." inline string.`,
+    );
+    console.error(
+      `  Block scalars break VS Code prompts-diagnostics-provider.`,
+    );
+    errors++;
+  }
 
   if (!frontmatter) {
     console.error(`❌ ${relativePath}: No frontmatter found`);

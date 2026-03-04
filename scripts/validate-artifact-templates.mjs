@@ -14,6 +14,7 @@ const ARTIFACT_HEADINGS = {
     "## 💰 Budget",
     "## 🔧 Operational Requirements",
     "## 🌍 Regional Preferences",
+    "## 📊 Complexity Classification",
     "## 📋 Summary for Architecture Assessment",
   ],
   "02-architecture-assessment.md": [

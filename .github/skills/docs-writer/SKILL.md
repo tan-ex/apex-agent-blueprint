@@ -225,3 +225,11 @@ issue with `docs-freshness` label
 - `references/repo-architecture.md` — Repo structure, entity inventory
 - `references/doc-standards.md` — Formatting conventions, validation
 - `references/freshness-checklist.md` — Audit targets and auto-fix rules
+
+## Reference Index
+
+| Reference                           | When to Load                          |
+| ----------------------------------- | ------------------------------------- |
+| `references/doc-standards.md`       | When checking documentation standards |
+| `references/freshness-checklist.md` | When running freshness audits         |
+| `references/repo-architecture.md`   | When analyzing repo structure         |

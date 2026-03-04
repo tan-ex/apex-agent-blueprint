@@ -1,9 +1,6 @@
 ---
 name: context-optimizer
-description: >-
-  Audits agent context window usage via debug logs, token profiling, and redundancy detection.
-  USE FOR: context optimization, token waste analysis, debug log parsing, hand-off gap analysis.
-  DO NOT USE FOR: Azure infrastructure, Bicep/Terraform code, architecture design, deployments.
+description: "Audits agent context window usage via debug logs, token profiling, and redundancy detection. USE FOR: context optimization, token waste analysis, debug log parsing, hand-off gap analysis. DO NOT USE FOR: Azure infrastructure, Bicep/Terraform code, architecture design, deployments."
 compatibility: Requires Python 3.10+ for log parser script
 ---
 
@@ -295,3 +292,11 @@ This skill contains **no project-specific logic**. To use in another project:
 - `scripts/parse-chat-logs.py` — Log parser producing structured JSON
 - `templates/optimization-report.md` — Report output template
 - `references/token-estimation.md` — Detailed token cost heuristics
+
+---
+
+## Reference Index
+
+| Reference                        | When to Load                                          |
+| -------------------------------- | ----------------------------------------------------- |
+| `references/token-estimation.md` | When estimating token counts for context optimization |

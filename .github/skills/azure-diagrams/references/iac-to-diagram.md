@@ -1,3 +1,5 @@
+<!-- ref:iac-to-diagram-v1 -->
+
 # Infrastructure as Code to Diagram
 
 Generate architecture diagrams directly from your Bicep, Terraform, ARM templates, or Azure Pipeline definitions.

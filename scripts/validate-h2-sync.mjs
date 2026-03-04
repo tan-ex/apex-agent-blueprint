@@ -188,7 +188,9 @@ function main() {
   // H2_REF_PATH is optional — only compared when present
   const h2RefExists = fs.existsSync(H2_REF_PATH);
   if (!h2RefExists) {
-    console.log(`  ⚠️  ${H2_REF_PATH} not found — skipping instruction-file comparison`);
+    console.log(
+      `  ⚠️  ${H2_REF_PATH} not found — skipping instruction-file comparison`,
+    );
   }
 
   const skillHeadings = parseMarkdownH2Blocks(readText(SKILL_PATH));

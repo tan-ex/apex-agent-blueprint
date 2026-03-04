@@ -1,3 +1,5 @@
+<!-- ref:doc-standards-v1 -->
+
 # Documentation Standards Reference
 
 > For use by the `docs-writer` skill. Consolidates rules from
@@ -18,11 +20,11 @@ Every doc in `docs/` must start with:
 
 ## Heading Rules
 
-| Rule | Detail |
-| --- | --- |
-| Single H1 | Only the document title uses `#` |
-| ATX style | Always `##`, `###` — never underline style |
-| No H4+ | Avoid `####` and deeper; restructure content instead |
+| Rule      | Detail                                                |
+| --------- | ----------------------------------------------------- |
+| Single H1 | Only the document title uses `#`                      |
+| ATX style | Always `##`, `###` — never underline style            |
+| No H4+    | Avoid `####` and deeper; restructure content instead  |
 | Numbering | Template artifacts use numbered H2s (`## 1. Section`) |
 
 ## Line Length
@@ -38,12 +40,12 @@ Breaking strategies:
 
 ## Link Conventions
 
-| Type | Format |
-| --- | --- |
-| Internal docs | `[Quickstart](quickstart.md)` — relative paths |
-| Cross-folder | `[Workflow](../docs/workflow.md)` — relative from source |
+| Type          | Format                                                                               |
+| ------------- | ------------------------------------------------------------------------------------ |
+| Internal docs | `[Quickstart](quickstart.md)` — relative paths                                       |
+| Cross-folder  | `[Workflow](../docs/workflow.md)` — relative from source                             |
 | External URLs | Reference-style: `[Azure docs][azure-waf]` with `[azure-waf]: https://...` at bottom |
-| Anchors | `[Section](#section-name)` — lowercase, hyphenated |
+| Anchors       | `[Section](#section-name)` — lowercase, hyphenated                                   |
 
 ## Mermaid Diagrams
 
@@ -76,32 +78,32 @@ Use GitHub-flavored callouts:
 
 Always specify language after opening backticks:
 
-- Bicep: `` ```bicep ``
-- PowerShell: `` ```powershell ``
-- Bash: `` ```bash ``
-- JSON: `` ```json ``
-- YAML: `` ```yaml ``
-- Markdown: `` ```markdown ``
-- Plain text: `` ```text ``
+- Bicep: ` ```bicep `
+- PowerShell: ` ```powershell `
+- Bash: ` ```bash `
+- JSON: ` ```json `
+- YAML: ` ```yaml `
+- Markdown: ` ```markdown `
+- Plain text: ` ```text `
 
 ## Tables
 
-| Standard | Rule |
-| --- | --- |
-| Header row | Always include |
-| Alignment | Left-align by default (use `\| --- \|`) |
+| Standard     | Rule                                                |
+| ------------ | --------------------------------------------------- |
+| Header row   | Always include                                      |
+| Alignment    | Left-align by default (use `\| --- \|`)             |
 | Pipe spacing | Space after opening pipe, space before closing pipe |
-| Column width | Keep readable; align pipes vertically |
+| Column width | Keep readable; align pipes vertically               |
 
 ## Prohibited References
 
 These agents were removed and converted to skills. Never reference them:
 
-| Removed Agent | Replacement Skill |
-| --- | --- |
-| `diagram.agent.md` | `azure-diagrams` skill |
-| `adr.agent.md` | `azure-adr` skill |
-| `docs.agent.md` | `azure-artifacts` skill |
+| Removed Agent      | Replacement Skill       |
+| ------------------ | ----------------------- |
+| `diagram.agent.md` | `azure-diagrams` skill  |
+| `adr.agent.md`     | `azure-adr` skill       |
+| `docs.agent.md`    | `azure-artifacts` skill |
 
 Also avoid references to removed paths:
 
@@ -111,12 +113,12 @@ Also avoid references to removed paths:
 
 ## Content Principles
 
-| Principle | Application |
-| --- | --- |
-| **DRY** | Single source of truth per topic |
-| **Current state** | No historical context in main docs |
-| **Action-oriented** | Every section answers "how do I...?" |
-| **Minimal** | If it doesn't help users today, remove it |
+| Principle                  | Application                                |
+| -------------------------- | ------------------------------------------ |
+| **DRY**                    | Single source of truth per topic           |
+| **Current state**          | No historical context in main docs         |
+| **Action-oriented**        | Every section answers "how do I...?"       |
+| **Minimal**                | If it doesn't help users today, remove it  |
 | **Prompt guide for depth** | Point to `docs/prompt-guide/` for examples |
 
 ## Validation Commands
@@ -150,15 +152,15 @@ When `VERSION.md` is updated, check these files for version references:
 
 Personas use consistent emoji in `docs/README.md`:
 
-| Persona | Emoji | Agent |
-| --- | --- | --- |
-| Maestro | 🎼 | InfraOps Conductor |
-| Scribe | 📜 | Requirements |
-| Oracle | 🏛️ | Architect |
-| Artisan | 🎨 | Design |
-| Strategist | 📐 | Bicep Plan |
-| Forge | ⚒️ | Bicep Code |
-| Envoy | 🚀 | Deploy |
-| Sentinel | 🔍 | Diagnose |
+| Persona    | Emoji | Agent              |
+| ---------- | ----- | ------------------ |
+| Maestro    | 🎼    | InfraOps Conductor |
+| Scribe     | 📜    | Requirements       |
+| Oracle     | 🏛️    | Architect          |
+| Artisan    | 🎨    | Design             |
+| Strategist | 📐    | Bicep Plan         |
+| Forge      | ⚒️    | Bicep Code         |
+| Envoy      | 🚀    | Deploy             |
+| Sentinel   | 🔍    | Diagnose           |
 
 When adding a new agent, choose a unique emoji + persona name.

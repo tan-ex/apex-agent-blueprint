@@ -1,3 +1,5 @@
+<!-- ref:sequence-auth-flows-v1 -->
+
 # Sequence and Authentication Flow Diagrams
 
 Guide for creating clean authentication flows, sequence diagrams, and numbered step flows.
@@ -5,6 +7,7 @@ Guide for creating clean authentication flows, sequence diagrams, and numbered s
 ## The Problem with Numbered Edge Labels
 
 When you have a flow like:
+
 1. Redirect → 2. Login → 3. Token → 4. Access → 5. Validate
 
 Graphviz often struggles to place numbered labels correctly, resulting in floating labels.
@@ -125,7 +128,7 @@ def create_auth_flow(filename='auth-flow'):
     )
     dot.attr('node', fontname='Segoe UI', fontsize='11')
     dot.attr('edge', fontname='Segoe UI', fontsize='9')
-    
+
     # Config box
     config = '''<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="8" BGCOLOR="#FFF8E1">
         <TR><TD><B>Authentication Methods</B></TD></TR>
@@ -135,29 +138,29 @@ def create_auth_flow(filename='auth-flow'):
         <TR><TD ALIGN="LEFT">Function triggers: Managed Identity</TD></TR>
     </TABLE>>'''
     dot.node('config', config, shape='none')
-    
+
     # Actors
-    dot.node('user', 'User\nBrowser', shape='box', style='rounded,filled', 
+    dot.node('user', 'User\nBrowser', shape='box', style='rounded,filled',
              fillcolor='#4CAF50', fontcolor='white', width='1.5')
     dot.node('app', 'PlymDocs\nApplication', shape='box', style='rounded,filled',
              fillcolor='#4CAF50', fontcolor='white', width='1.5')
     dot.node('entra', 'Microsoft\nEntra ID', shape='box', style='rounded,filled',
              fillcolor='#2196F3', fontcolor='white', width='1.5')
-    
+
     # Force horizontal arrangement
     with dot.subgraph() as s:
         s.attr(rank='same')
         s.node('user')
         s.node('app')
         s.node('entra')
-    
+
     # Edges with external labels
     dot.edge('user', 'app', xlabel='4. Access', color='#4CAF50')
     dot.edge('app', 'entra', xlabel='1. Redirect', color='#2196F3')
     dot.edge('entra', 'user', xlabel='2. Login\n(MFA if req.)', style='dashed', color='#2196F3')
     dot.edge('user', 'entra', xlabel='3. Token', style='dashed', color='#4CAF50', constraint='false')
     dot.edge('app', 'entra', xlabel='5. Validate', style='dashed', color='#9E9E9E', constraint='false')
-    
+
     dot.render(filename, cleanup=True)
     print(f"Generated: {filename}.png")
 
