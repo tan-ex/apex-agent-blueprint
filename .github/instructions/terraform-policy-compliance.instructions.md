@@ -1,6 +1,6 @@
 ---
 description: "MANDATORY Azure Policy compliance rules for Terraform code generation. Azure Policy always wins."
-applyTo: "**/*.tf, **/*.agent.md"
+applyTo: "**/*.tf"
 ---
 
 # Terraform Policy Compliance Instructions

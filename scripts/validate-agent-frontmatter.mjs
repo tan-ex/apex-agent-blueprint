@@ -42,6 +42,9 @@ function validateAgent(filePath, isSubagent) {
 
   if (!frontmatter) {
     console.error(`❌ ${relativePath}: No frontmatter found`);
+    console.error(
+      `  Fix: Add YAML frontmatter at the top: ---\nname: ...\ndescription: ...\nuser-invokable: true\ntools: []\n---`,
+    );
     errors++;
     return;
   }
@@ -52,6 +55,9 @@ function validateAgent(filePath, isSubagent) {
   for (const field of requiredFields) {
     if (!(field in frontmatter)) {
       console.error(`❌ ${relativePath}: Missing required field '${field}'`);
+      console.error(
+        `  Fix: Add '${field}: ...' to the YAML frontmatter block.`,
+      );
       errors++;
     }
   }
@@ -100,6 +106,9 @@ function validateAgent(filePath, isSubagent) {
   if ("agents" in frontmatter) {
     if (!Array.isArray(frontmatter.agents)) {
       console.warn(`⚠️  ${relativePath}: 'agents' should be an array`);
+      console.warn(
+        `  Fix: Use YAML list syntax: agents:\n  - agent-name-1\n  - agent-name-2`,
+      );
       warnings++;
     }
   }

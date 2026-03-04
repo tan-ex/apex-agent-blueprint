@@ -75,7 +75,7 @@ export function parseFrontmatter(content) {
         continue;
       }
 
-      if (rawValue === ">" || rawValue === "|") {
+      if (/^[>|][-+]?$/.test(rawValue)) {
         inMultilineString = true;
         currentValue = [];
         continue;

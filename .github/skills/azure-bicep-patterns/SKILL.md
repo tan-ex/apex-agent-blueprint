@@ -1,6 +1,9 @@
 ---
 name: azure-bicep-patterns
-description: Common Azure Bicep infrastructure patterns including hub-spoke networking, private endpoints, diagnostic settings, conditional deployments, and AVM module composition. Use when designing or generating Bicep templates that combine multiple Azure resources into repeatable patterns.
+description: >-
+  Reusable Azure Bicep patterns: hub-spoke, private endpoints, diagnostics, AVM composition.
+  USE FOR: Bicep template design, hub-spoke networking, private endpoint patterns, AVM modules.
+  DO NOT USE FOR: Terraform code, architecture decisions, troubleshooting, diagram generation.
 compatibility: Requires Azure CLI with Bicep extension
 ---
 
@@ -14,8 +17,8 @@ skill (naming, tags, regions) with composable architecture building blocks.
 
 ## Quick Reference
 
-| Pattern                  | When to Use                                     |
-| ------------------------ | ----------------------------------------------- |
+| Pattern                  | When to Use                                      |
+| ------------------------ | ------------------------------------------------ |
 | Hub-Spoke Networking     | Multi-workload environments with shared services |
 | Private Endpoint Wiring  | Any PaaS service requiring private connectivity  |
 | Diagnostic Settings      | Every deployed resource (mandatory)              |
@@ -109,16 +112,16 @@ resource privateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
 
 Group IDs by service type:
 
-| Service          | Group ID       | DNS Zone                                  |
-| ---------------- | -------------- | ----------------------------------------- |
-| Storage Blob     | `blob`         | `privatelink.blob.core.windows.net`       |
-| Storage Table    | `table`        | `privatelink.table.core.windows.net`      |
-| Key Vault        | `vault`        | `privatelink.vaultcore.azure.net`         |
-| SQL Server       | `sqlServer`    | `privatelink.database.windows.net`        |
-| Cosmos DB        | `Sql`          | `privatelink.documents.azure.com`         |
-| App Service      | `sites`        | `privatelink.azurewebsites.net`           |
-| Event Hub        | `namespace`    | `privatelink.servicebus.windows.net`      |
-| Container Reg    | `registry`     | `privatelink.azurecr.io`                  |
+| Service       | Group ID    | DNS Zone                             |
+| ------------- | ----------- | ------------------------------------ |
+| Storage Blob  | `blob`      | `privatelink.blob.core.windows.net`  |
+| Storage Table | `table`     | `privatelink.table.core.windows.net` |
+| Key Vault     | `vault`     | `privatelink.vaultcore.azure.net`    |
+| SQL Server    | `sqlServer` | `privatelink.database.windows.net`   |
+| Cosmos DB     | `Sql`       | `privatelink.documents.azure.com`    |
+| App Service   | `sites`     | `privatelink.azurewebsites.net`      |
+| Event Hub     | `namespace` | `privatelink.servicebus.windows.net` |
+| Container Reg | `registry`  | `privatelink.azurecr.io`             |
 
 ---
 
@@ -250,13 +253,13 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 
 Common role definition IDs:
 
-| Role                        | ID                                     |
-| --------------------------- | -------------------------------------- |
-| Key Vault Secrets User      | `4633458b-17de-408a-b874-0445c86b69e6` |
-| Storage Blob Data Reader    | `2a2b9908-6ea1-4ae2-8e65-a410df84e7d1` |
-| Storage Blob Data Contrib   | `ba92f5b4-2d11-453d-a403-e96b0029c9fe` |
-| Cosmos DB Account Reader    | `fbdf93bf-df7d-467e-a4d2-9458aa1360c8` |
-| SQL DB Contributor          | `9b7fa17d-e63e-47b0-bb0a-15c516ac86ec` |
+| Role                      | ID                                     |
+| ------------------------- | -------------------------------------- |
+| Key Vault Secrets User    | `4633458b-17de-408a-b874-0445c86b69e6` |
+| Storage Blob Data Reader  | `2a2b9908-6ea1-4ae2-8e65-a410df84e7d1` |
+| Storage Blob Data Contrib | `ba92f5b4-2d11-453d-a403-e96b0029c9fe` |
+| Cosmos DB Account Reader  | `fbdf93bf-df7d-467e-a4d2-9458aa1360c8` |
+| SQL DB Contributor        | `9b7fa17d-e63e-47b0-bb0a-15c516ac86ec` |
 
 - Always use `guid()` for deterministic, idempotent assignment names
 - Set `principalType: 'ServicePrincipal'` for managed identities
@@ -278,14 +281,14 @@ az deployment group what-if \
 
 Interpret results:
 
-| Change Type  | Icon   | Action Required                                |
-| ------------ | ------ | ---------------------------------------------- |
-| Create       | green  | New resource — verify name and configuration   |
-| Modify       | yellow | Property change — check for breaking changes   |
-| Delete       | red    | Resource removal — confirm intentional         |
-| NoChange     | grey   | Idempotent — no action needed                  |
-| Deploy       | blue   | Child resource deployment                      |
-| Ignore       | grey   | Read-only property change — safe to ignore     |
+| Change Type | Icon   | Action Required                              |
+| ----------- | ------ | -------------------------------------------- |
+| Create      | green  | New resource — verify name and configuration |
+| Modify      | yellow | Property change — check for breaking changes |
+| Delete      | red    | Resource removal — confirm intentional       |
+| NoChange    | grey   | Idempotent — no action needed                |
+| Deploy      | blue   | Child resource deployment                    |
+| Ignore      | grey   | Read-only property change — safe to ignore   |
 
 Red flags to catch: unexpected deletes, SKU downgrades, public access changes,
 authentication mode changes, or identity removal.
@@ -296,9 +299,9 @@ authentication mode changes, or identity removal.
 
 For patterns not covered here, query official documentation:
 
-| Topic                    | How to Find                                                                |
-| ------------------------ | -------------------------------------------------------------------------- |
-| AVM module catalog       | `microsoft_docs_search(query="Azure Verified Modules registry Bicep")`     |
-| Resource type schema     | `microsoft_docs_search(query="{resource-type} Bicep template reference")` |
-| Networking patterns      | `microsoft_docs_search(query="Azure hub-spoke network topology Bicep")`   |
-| Security baseline        | `microsoft_docs_search(query="{service} security baseline")`              |
+| Topic                | How to Find                                                               |
+| -------------------- | ------------------------------------------------------------------------- |
+| AVM module catalog   | `microsoft_docs_search(query="Azure Verified Modules registry Bicep")`    |
+| Resource type schema | `microsoft_docs_search(query="{resource-type} Bicep template reference")` |
+| Networking patterns  | `microsoft_docs_search(query="Azure hub-spoke network topology Bicep")`   |
+| Security baseline    | `microsoft_docs_search(query="{service} security baseline")`              |

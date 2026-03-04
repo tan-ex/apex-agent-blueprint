@@ -13,8 +13,8 @@ It includes all required tools, extensions, and configurations to build Azure in
 
 - **Azure CLI** (latest) with Bicep CLI
 - **Bicep** for Azure infrastructure
-- **Terraform** (latest) with **tfsec** security scanner
-- **Checkov** - Infrastructure security scanner
+- **Terraform** (latest) with **TFLint** (pinned to v0.61.0)
+- **Checkov** - Infrastructure security scanner (replaces tfsec, which is archived and has no ARM64 support)
 - **Go** (latest) — used to install the Terraform MCP Server binary
 
 ### Scripting & Automation
@@ -75,6 +75,59 @@ It includes all required tools, extensions, and configurations to build Azure in
 1. Open VS Code in this repository folder
 2. Click "Reopen in Container" when prompted
 
+### GitHub CLI Authentication (GH_TOKEN)
+
+HTTPS-based `gh auth login` can fail inside devcontainers on some platforms (Windows, ARM, WSL 2).
+The recommended approach is a **Personal Access Token (PAT)** set as a host environment variable.
+The container reads it automatically — no `gh auth login` required inside the container.
+
+#### Create a Fine-Grained PAT
+
+> **Yes, fine-grained PATs work here.** The `gh` CLI fully supports fine-grained tokens
+> (`github_pat_...`) via the `GH_TOKEN` environment variable for all repository-scoped operations.
+
+1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens**
+2. Click **Generate new token**
+3. Set expiry (90 days recommended; rotate via calendar reminder)
+4. **Repository access**: All repositories, or select specific ones
+5. **Permissions** — minimum required:
+
+   | Permission    | Level      |
+   | ------------- | ---------- |
+   | Contents      | Read/Write |
+   | Metadata      | Read       |
+   | Pull requests | Read/Write |
+   | Issues        | Read/Write |
+   | Workflows     | Read/Write |
+
+6. Copy the token (`github_pat_...`)
+
+#### Set it on your host machine (once per machine)
+
+```bash
+# Linux / macOS / WSL 2 — add to ~/.bashrc, ~/.zshrc, or ~/.profile, then reload
+export GH_TOKEN=github_pat_your_token_here
+```
+
+```powershell
+# Windows PowerShell — user-scoped, survives reboots
+[System.Environment]::SetEnvironmentVariable('GH_TOKEN', 'github_pat_your_token_here', 'User')
+```
+
+The devcontainer forwards `GH_TOKEN` from your host automatically
+(`"GH_TOKEN": "${localEnv:GH_TOKEN}"` in `devcontainer.json`). If the variable is not set,
+`gh` falls back to its normal interactive auth flow.
+
+#### Verify inside the container
+
+```bash
+gh auth status
+# Expected: ✓ Logged in to github.com as <your-username> (token)
+```
+
+> **Token rotation**: When your PAT expires, update the env var on your host machine and
+> rebuild the container (`F1 → Dev Containers: Rebuild Container`).
+
 ### First-Time Setup (Inside Container)
 
 ```bash
@@ -96,9 +149,10 @@ cd ../../infra/bicep/ && tree -L 2
 
 ### Pre-configured Environment Variables
 
-| Variable                  | Value           | Purpose                                        |
-| ------------------------- | --------------- | ---------------------------------------------- |
-| `AZURE_DEFAULTS_LOCATION` | `swedencentral` | Default Azure region (matches repo guidelines) |
+| Variable                  | Value                  | Purpose                                        |
+| ------------------------- | ---------------------- | ---------------------------------------------- |
+| `AZURE_DEFAULTS_LOCATION` | `swedencentral`        | Default Azure region (matches repo guidelines) |
+| `GH_TOKEN`                | `${localEnv:GH_TOKEN}` | GitHub PAT forwarded from host; enables `gh` CLI without interactive login |
 
 ### Azure Credentials Mount
 

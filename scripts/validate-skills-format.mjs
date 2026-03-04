@@ -58,7 +58,9 @@ function validateSkill(skillDir) {
 
   // Check SKILL.md exists
   if (!fs.existsSync(skillFile)) {
-    console.error(`❌ ${skillName}: Missing SKILL.md file`);
+    console.error(
+      `❌ ${skillName}: Missing SKILL.md file. Fix: Create .github/skills/${skillName}/SKILL.md with at least a 'description' in frontmatter.`,
+    );
     errors++;
     return;
   }
@@ -73,7 +75,9 @@ function validateSkill(skillDir) {
 
   // Check frontmatter exists
   if (!frontmatter) {
-    console.error(`❌ ${skillName}: No frontmatter found in SKILL.md`);
+    console.error(
+      `❌ ${skillName}: No frontmatter found in SKILL.md. Fix: Add ---\ndescription: "..."\n--- at the top.`,
+    );
     errors++;
     return;
   }
@@ -82,7 +86,7 @@ function validateSkill(skillDir) {
   for (const field of REQUIRED_FIELDS) {
     if (!(field in frontmatter) || !frontmatter[field]) {
       console.error(
-        `❌ ${skillName}: Missing required frontmatter field '${field}'`,
+        `❌ ${skillName}: Missing required frontmatter field '${field}'. Fix: Add '${field}: "..."' to SKILL.md frontmatter.`,
       );
       errors++;
     }

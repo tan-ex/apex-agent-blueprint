@@ -1,6 +1,9 @@
 ---
 name: azure-troubleshooting
-description: Azure resource troubleshooting patterns including KQL templates, metric thresholds, health checks, and remediation playbooks. Use when diagnosing unhealthy Azure resources or building diagnostic workflows.
+description: >-
+  Azure resource diagnostics: KQL templates, metric thresholds, health checks, remediation.
+  USE FOR: resource errors, unhealthy alerts, KQL queries, diagnostic workflows, remediation.
+  DO NOT USE FOR: new infrastructure design, Bicep/Terraform code, architecture diagrams.
 compatibility: Requires Azure CLI with resource-graph extension
 ---
 
@@ -14,13 +17,13 @@ and per-resource-type diagnostic workflows.
 
 ## Quick Reference
 
-| Capability              | Description                                                      |
-| ----------------------- | ---------------------------------------------------------------- |
-| Resource Discovery      | Azure Resource Graph queries to find and inventory resources     |
-| Health Checks           | Per-resource-type diagnostic commands and metric thresholds      |
-| KQL Templates           | Log Analytics queries for common failure scenarios               |
-| Severity Classification | Standardised impact/urgency mapping for findings                 |
-| Remediation Playbooks   | Step-by-step resolution for common issues                        |
+| Capability              | Description                                                  |
+| ----------------------- | ------------------------------------------------------------ |
+| Resource Discovery      | Azure Resource Graph queries to find and inventory resources |
+| Health Checks           | Per-resource-type diagnostic commands and metric thresholds  |
+| KQL Templates           | Log Analytics queries for common failure scenarios           |
+| Severity Classification | Standardised impact/urgency mapping for findings             |
+| Remediation Playbooks   | Step-by-step resolution for common issues                    |
 
 ---
 
@@ -75,14 +78,14 @@ If no diagnostic settings exist, create them using the pattern from the
 
 ### App Service / Web Apps
 
-| Check                  | Command / Query                                                          | Healthy Threshold          |
-| ---------------------- | ------------------------------------------------------------------------ | -------------------------- |
-| HTTP health            | `az webapp show --name {name} --query state`                             | `Running`                  |
-| Response time          | KQL: `AzureMetrics \| where MetricName == "HttpResponseTime"`            | p95 < 2 seconds            |
-| HTTP 5xx rate          | KQL: `AzureMetrics \| where MetricName == "Http5xx"`                     | < 1% of total requests     |
-| CPU usage              | KQL: `AzureMetrics \| where MetricName == "CpuPercentage"`              | < 80% sustained            |
-| Memory usage           | KQL: `AzureMetrics \| where MetricName == "MemoryPercentage"`           | < 85% sustained            |
-| App Service Plan SKU   | `az appservice plan show --name {plan} --query sku`                      | Matches architecture spec  |
+| Check                | Command / Query                                               | Healthy Threshold         |
+| -------------------- | ------------------------------------------------------------- | ------------------------- |
+| HTTP health          | `az webapp show --name {name} --query state`                  | `Running`                 |
+| Response time        | KQL: `AzureMetrics \| where MetricName == "HttpResponseTime"` | p95 < 2 seconds           |
+| HTTP 5xx rate        | KQL: `AzureMetrics \| where MetricName == "Http5xx"`          | < 1% of total requests    |
+| CPU usage            | KQL: `AzureMetrics \| where MetricName == "CpuPercentage"`    | < 80% sustained           |
+| Memory usage         | KQL: `AzureMetrics \| where MetricName == "MemoryPercentage"` | < 85% sustained           |
+| App Service Plan SKU | `az appservice plan show --name {plan} --query sku`           | Matches architecture spec |
 
 ```kql
 // App Service error rate over last 24h
@@ -96,13 +99,13 @@ AzureMetrics
 
 ### Virtual Machines
 
-| Check             | Command / Query                                                         | Healthy Threshold        |
-| ----------------- | ----------------------------------------------------------------------- | ------------------------ |
-| Power state       | `az vm get-instance-view --name {name} --query instanceView.statuses`   | `PowerState/running`     |
-| CPU utilisation   | KQL: `Perf \| where ObjectName == "Processor"`                          | < 85% sustained          |
-| Available memory  | KQL: `Perf \| where ObjectName == "Memory"`                             | > 20% free               |
-| Disk latency      | KQL: `Perf \| where CounterName == "Avg. Disk sec/Transfer"`           | < 20 ms                  |
-| Boot diagnostics  | `az vm boot-diagnostics get-boot-log --name {name}`                     | No kernel panic / errors |
+| Check            | Command / Query                                                       | Healthy Threshold        |
+| ---------------- | --------------------------------------------------------------------- | ------------------------ |
+| Power state      | `az vm get-instance-view --name {name} --query instanceView.statuses` | `PowerState/running`     |
+| CPU utilisation  | KQL: `Perf \| where ObjectName == "Processor"`                        | < 85% sustained          |
+| Available memory | KQL: `Perf \| where ObjectName == "Memory"`                           | > 20% free               |
+| Disk latency     | KQL: `Perf \| where CounterName == "Avg. Disk sec/Transfer"`          | < 20 ms                  |
+| Boot diagnostics | `az vm boot-diagnostics get-boot-log --name {name}`                   | No kernel panic / errors |
 
 ```kql
 // VM CPU spikes in last 6h
@@ -117,31 +120,31 @@ Perf
 
 ### Storage Accounts
 
-| Check              | Command / Query                                                          | Healthy Threshold          |
-| ------------------ | ------------------------------------------------------------------------ | -------------------------- |
-| Availability       | KQL: `AzureMetrics \| where MetricName == "Availability"`               | > 99.9%                    |
-| E2E latency        | KQL: `AzureMetrics \| where MetricName == "SuccessE2ELatency"`          | < 100 ms (hot), <1s (cool)|
-| Throttling         | KQL: `StorageBlobLogs \| where StatusCode == 503`                        | 0 in normal operation      |
-| Used capacity      | `az storage account show --name {name} --query primaryEndpoints`         | < 80% quota                |
-| HTTPS enforcement  | `az storage account show --name {name} --query enableHttpsTrafficOnly`   | `true`                     |
+| Check             | Command / Query                                                        | Healthy Threshold          |
+| ----------------- | ---------------------------------------------------------------------- | -------------------------- |
+| Availability      | KQL: `AzureMetrics \| where MetricName == "Availability"`              | > 99.9%                    |
+| E2E latency       | KQL: `AzureMetrics \| where MetricName == "SuccessE2ELatency"`         | < 100 ms (hot), <1s (cool) |
+| Throttling        | KQL: `StorageBlobLogs \| where StatusCode == 503`                      | 0 in normal operation      |
+| Used capacity     | `az storage account show --name {name} --query primaryEndpoints`       | < 80% quota                |
+| HTTPS enforcement | `az storage account show --name {name} --query enableHttpsTrafficOnly` | `true`                     |
 
 ### SQL Database
 
-| Check              | Command / Query                                                          | Healthy Threshold          |
-| ------------------ | ------------------------------------------------------------------------ | -------------------------- |
-| DTU/vCore usage    | KQL: `AzureMetrics \| where MetricName == "dtu_consumption_percent"`     | < 80% sustained            |
-| Connection failures| KQL: `AzureMetrics \| where MetricName == "connection_failed"`           | < 5 per 5-min window       |
-| Deadlocks          | KQL: `AzureMetrics \| where MetricName == "deadlock"`                    | 0                          |
-| Storage usage      | KQL: `AzureMetrics \| where MetricName == "storage_percent"`             | < 85%                      |
-| Long queries       | `sys.dm_exec_query_stats` via Azure Portal                               | No queries > 30s           |
+| Check               | Command / Query                                                      | Healthy Threshold    |
+| ------------------- | -------------------------------------------------------------------- | -------------------- |
+| DTU/vCore usage     | KQL: `AzureMetrics \| where MetricName == "dtu_consumption_percent"` | < 80% sustained      |
+| Connection failures | KQL: `AzureMetrics \| where MetricName == "connection_failed"`       | < 5 per 5-min window |
+| Deadlocks           | KQL: `AzureMetrics \| where MetricName == "deadlock"`                | 0                    |
+| Storage usage       | KQL: `AzureMetrics \| where MetricName == "storage_percent"`         | < 85%                |
+| Long queries        | `sys.dm_exec_query_stats` via Azure Portal                           | No queries > 30s     |
 
 ### Static Web Apps
 
-| Check              | Command / Query                                                          | Healthy Threshold          |
-| ------------------ | ------------------------------------------------------------------------ | -------------------------- |
-| Deployment status  | `az staticwebapp show --name {name} --query defaultHostname`             | Resolves correctly         |
-| Custom domain      | `az staticwebapp hostname list --name {name}`                            | SSL valid, not expired     |
-| Function health    | Check managed function app logs in Log Analytics                         | No 5xx in API routes       |
+| Check             | Command / Query                                              | Healthy Threshold      |
+| ----------------- | ------------------------------------------------------------ | ---------------------- |
+| Deployment status | `az staticwebapp show --name {name} --query defaultHostname` | Resolves correctly     |
+| Custom domain     | `az staticwebapp hostname list --name {name}`                | SSL valid, not expired |
+| Function health   | Check managed function app logs in Log Analytics             | No 5xx in API routes   |
 
 ---
 
@@ -149,12 +152,12 @@ Perf
 
 Classify every finding with consistent severity:
 
-| Severity | Criteria                                                                | Response Time    |
-| -------- | ----------------------------------------------------------------------- | ---------------- |
-| Critical | Service down, data loss risk, security breach                           | Immediate        |
-| High     | Degraded performance, failing redundancy, auth issues                   | Within 4 hours   |
-| Medium   | Suboptimal configuration, missing best practices, capacity warnings     | Within 24 hours  |
-| Low      | Cosmetic issues, documentation gaps, minor optimisations                | Next sprint      |
+| Severity | Criteria                                                            | Response Time   |
+| -------- | ------------------------------------------------------------------- | --------------- |
+| Critical | Service down, data loss risk, security breach                       | Immediate       |
+| High     | Degraded performance, failing redundancy, auth issues               | Within 4 hours  |
+| Medium   | Suboptimal configuration, missing best practices, capacity warnings | Within 24 hours |
+| Low      | Cosmetic issues, documentation gaps, minor optimisations            | Next sprint     |
 
 ---
 
@@ -218,16 +221,18 @@ Structure the diagnostic report as:
 
 ### Findings Summary
 
-| # | Finding | Severity | Status |
-|---|---------|----------|--------|
-| 1 | ...     | High     | Open   |
+| #   | Finding | Severity | Status |
+| --- | ------- | -------- | ------ |
+| 1   | ...     | High     | Open   |
 
 ### Detailed Findings
 
 #### Finding 1: {title}
+
 ...
 
 ### Recommended Actions
+
 1. ...
 ```
 
@@ -262,9 +267,9 @@ Structure the diagnostic report as:
 
 For issues not covered here, query official documentation:
 
-| Topic                    | How to Find                                                                      |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| Service-specific limits  | `microsoft_docs_search(query="{service} limits quotas")`                         |
-| KQL reference            | `microsoft_docs_search(query="KQL quick reference Azure Monitor")`               |
-| Metric definitions       | `microsoft_docs_search(query="{service} supported metrics Azure Monitor")`       |
-| Troubleshooting guides   | `microsoft_docs_search(query="{service} troubleshoot common issues")`            |
+| Topic                   | How to Find                                                                |
+| ----------------------- | -------------------------------------------------------------------------- |
+| Service-specific limits | `microsoft_docs_search(query="{service} limits quotas")`                   |
+| KQL reference           | `microsoft_docs_search(query="KQL quick reference Azure Monitor")`         |
+| Metric definitions      | `microsoft_docs_search(query="{service} supported metrics Azure Monitor")` |
+| Troubleshooting guides  | `microsoft_docs_search(query="{service} troubleshoot common issues")`      |

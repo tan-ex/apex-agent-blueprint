@@ -1,6 +1,6 @@
 ---
 description: "MANDATORY Azure Policy compliance rules for Bicep code generation and agent definitions"
-applyTo: "**/*.bicep, **/*.agent.md"
+applyTo: "**/*.bicep"
 ---
 
 # Bicep Policy Compliance Instructions

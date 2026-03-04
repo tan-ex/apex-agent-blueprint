@@ -608,7 +608,7 @@ function validateTemplate(artifactName) {
     error(
       `Template ${templatePath} is missing required H2 headings: ${missing.join(
         ", ",
-      )}`,
+      )}. Fix: Copy exact headings from the artifact template or run 'npm run fix:artifact-h2'.`,
       { filePath: templatePath, line: 1 },
     );
     return;
@@ -695,7 +695,7 @@ function validateAgentLinks() {
 
     if (!refsTemplate && !refsSkill) {
       error(
-        `Agent ${agentPath} must reference template ${relativeTemplatePath} or azure-artifacts skill`,
+        `Agent ${agentPath} must reference template ${relativeTemplatePath} or azure-artifacts skill. Fix: Add 'Read .github/skills/azure-artifacts/SKILL.md' to the agent body.`,
         { filePath: agentPath, line: 1 },
       );
     }
@@ -718,7 +718,7 @@ function validateNoEmbeddedSkeletons() {
       const foundInBlock = required.filter((h) => block.includes(h));
       if (foundInBlock.length >= 3) {
         error(
-          `Agent ${agentPath} appears to embed a ${artifactName} skeleton (found ${foundInBlock.length} headings in a fenced block).`,
+          `Agent ${agentPath} appears to embed a ${artifactName} skeleton (found ${foundInBlock.length} headings in a fenced block). Fix: Remove the embedded H2 skeleton; agents should reference the azure-artifacts skill instead.`,
           { filePath: agentPath, line: 1 },
         );
         break;
@@ -787,7 +787,7 @@ function validateArtifactCompliance(relPath) {
     reportFn(
       `Artifact ${relPath} is missing required H2 headings: ${missing.join(
         ", ",
-      )}`,
+      )}. Fix: Copy exact headings from the template or run 'npm run fix:artifact-h2 ${relPath} --apply'.`,
       { filePath: relPath, line: 1 },
     );
   }
@@ -801,7 +801,7 @@ function validateArtifactCompliance(relPath) {
       reportFn(
         `Artifact ${relPath} has required headings out of order: '${
           presentRequired[i]
-        }' should come before '${presentRequired[i + 1]}'.`,
+        }' should come before '${presentRequired[i + 1]}'. Fix: Reorder headings to match: ${required.join(" \u2192 ")}.`,
         { filePath: relPath, line: 1 },
       );
       break;

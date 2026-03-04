@@ -1,6 +1,9 @@
 ---
 name: azure-adr
-description: Creates Azure Architecture Decision Records (ADRs) with WAF mapping, alternatives, consequences, and implementation guidance; use for architecture decision documentation requests.
+description: >-
+  Creates Azure Architecture Decision Records with WAF mapping, alternatives, and consequences.
+  USE FOR: ADR creation, architecture decisions, trade-off analysis, WAF pillar justification.
+  DO NOT USE FOR: Bicep/Terraform code generation, diagram creation, cost estimates.
 compatibility: Works with Claude Code, GitHub Copilot, VS Code, and any Agent Skills compatible tool; no external dependencies required.
 license: MIT
 metadata:
