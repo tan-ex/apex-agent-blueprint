@@ -2,7 +2,7 @@
 name: 03-Architect
 description: Expert Architect providing guidance using Azure Well-Architected Framework principles and Microsoft best practices. Evaluates all decisions against WAF pillars (Security, Reliability, Performance, Cost, Operations) with Microsoft documentation lookups. Automatically generates cost estimates using Azure Pricing MCP tools. Saves WAF assessments and cost estimates to markdown documentation files.
 model: ["Claude Opus 4.6"]
-user-invokable: true
+user-invocable: true
 agents:
   [
     "cost-estimate-subagent",
@@ -15,7 +15,7 @@ tools:
     vscode/getProjectSetupInfo,
     vscode/installExtension,
     vscode/newWorkspace,
-    vscode/openSimpleBrowser,
+    browser,
     vscode/runCommand,
     vscode/askQuestions,
     vscode/vscodeAPI,
@@ -161,6 +161,7 @@ Verify these are documented — **ask user via `askQuestions` if missing**:
      Use as structural skeletons (replicate badges, TOC, navigation, attribution exactly).
 4. **Read** `.github/skills/microsoft-docs/SKILL.md` — query official Microsoft docs for service limits,
    SLAs, SKU comparisons, and WAF best practices
+5. **Read** `.github/skills/context-shredding/SKILL.md` — runtime compression tiers for loading large artifacts
 
 These skills are your single source of truth. Do NOT use hardcoded values.
 

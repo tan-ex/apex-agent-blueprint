@@ -2,7 +2,7 @@
 name: 08-As-Built
 description: "Generates Step 7 as-built documentation suite after successful deployment. Reads all prior artifacts (Steps 1-6) and deployed resource state to produce comprehensive workload documentation: design document, operations runbook, cost estimate, compliance matrix, backup/DR plan, resource inventory, and documentation index."
 model: ["GPT-5.3-Codex (copilot)"]
-user-invokable: true
+user-invocable: true
 agents: ["cost-estimate-subagent"]
 tools:
   [
@@ -10,7 +10,7 @@ tools:
     vscode/getProjectSetupInfo,
     vscode/installExtension,
     vscode/newWorkspace,
-    vscode/openSimpleBrowser,
+    browser,
     vscode/runCommand,
     vscode/askQuestions,
     vscode/vscodeAPI,
@@ -86,7 +86,8 @@ handoffs:
 1. **Read** `.github/skills/azure-defaults/SKILL.md` — regions, tags, naming, pricing MCP names
 2. **Read** `.github/skills/azure-artifacts/SKILL.md` — H2 templates for all 07-\* artifacts
 3. **Read** `.github/skills/azure-diagrams/SKILL.md` — diagram generation contract
-4. **Read** the template files for your artifacts (all in `.github/skills/azure-artifacts/templates/`):
+4. **Read** `.github/skills/context-shredding/SKILL.md` — runtime compression for predecessor artifacts
+5. **Read** the template files for your artifacts (all in `.github/skills/azure-artifacts/templates/`):
    - `07-design-document.template.md`
    - `07-operations-runbook.template.md`
    - `07-ab-cost-estimate.template.md`
