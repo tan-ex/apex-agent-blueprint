@@ -48,6 +48,10 @@ npm run lint:h2-sync                     # H2 heading sync between templates and
 npm run lint:governance-refs             # Governance reference validation
 npm run validate:instruction-refs        # Instruction reference validation
 npm run validate:session-state           # Session state JSON schema validation
+npm run validate:session-lock            # Session lock/claim model validation
+npm run validate:workflow-graph          # Workflow DAG graph validation
+npm run validate:agent-registry          # Agent registry consistency
+npm run validate:skill-affinity          # Skill/agent affinity catalog validation
 
 # Bicep validation (replace {project} with actual project name)
 bicep build infra/bicep/{project}/main.bicep
@@ -124,6 +128,11 @@ npm run validate:all
 # Pre-commit hooks (installed via lefthook)
 npm run prepare
 
+# Pre-push hook (diff-based, automatic via lefthook)
+# Only validates file types that changed: *.bicep, *.tf, *.md, *.agent.md, etc.
+# Runs domain-scoped validators in parallel for speed
+git push  # triggers diff-based-push-check.sh automatically
+
 # Bicep: lint + build before committing templates
 bicep lint infra/bicep/{project}/main.bicep
 bicep build infra/bicep/{project}/main.bicep
@@ -159,9 +168,14 @@ Always run `npm run lint:md` and relevant validations before committing.
 ```text
 .github/
   agents/              # Agent definitions (*.agent.md) — 14 top-level + 9 subagents
-    _subagents/        # Subagent definitions (non-user-invokable)
+    _subagents/        # Subagent definitions (non-user-invocable)
   skills/              # Reusable domain knowledge (SKILL.md per skill)
+    workflow-engine/   # DAG model, workflow-graph.json
+    context-shredding/ # Runtime context compression tiers and templates
+    iac-common/        # Shared deploy patterns + circuit-breaker.md
   instructions/        # File-type rules with glob-based auto-application
+  agent-registry.json  # Machine-readable agent role → file/model/skills mapping
+  skill-affinity.json  # Skill/agent affinity weights (primary/secondary/never)
   copilot-instructions.md  # VS Code Copilot-specific orchestration instructions
 agent-output/          # All agent-generated artifacts organized by project
   {project}/           # Per-project: 00-session-state.json + 01-requirements.md through 07-*.md
@@ -170,7 +184,7 @@ infra/
   terraform/{project}/ # Terraform configurations (main.tf + modules/)
 mcp/
   azure-pricing-mcp/   # Custom Azure Pricing MCP server (Python)
-scripts/               # Validation and maintenance scripts (Node.js)
+scripts/               # Validation and maintenance scripts (Node.js) — 27 validators
 docs/                  # User-facing documentation
 .vscode/
   mcp.json             # MCP server configuration (github, microsoft-learn, azure-pricing, terraform)

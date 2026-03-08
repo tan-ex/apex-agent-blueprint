@@ -3,7 +3,7 @@ name: 07b-Bicep Deploy
 model: ["Claude Sonnet 4.6"]
 description: Executes Azure deployments using generated Bicep templates. Runs deploy.ps1 scripts, performs what-if analysis, and manages deployment lifecycle. Step 6 of the 7-step agentic workflow.
 argument-hint: Deploy the Bicep templates for a specific project
-user-invokable: true
+user-invocable: true
 agents: ["challenger-review-subagent"]
 tools:
   [
@@ -11,7 +11,7 @@ tools:
     vscode/getProjectSetupInfo,
     vscode/installExtension,
     vscode/newWorkspace,
-    vscode/openSimpleBrowser,
+    browser,
     vscode/runCommand,
     vscode/askQuestions,
     vscode/vscodeAPI,
@@ -114,6 +114,16 @@ handoffs:
 2. **Read** `.github/skills/azure-artifacts/SKILL.md` — H2 template for `06-deployment-summary.md`
 3. **Read** `.github/skills/azure-artifacts/templates/06-deployment-summary.template.md`
    — use as structural skeleton (replicate badges, TOC, navigation, attribution)
+4. **Read** `.github/skills/iac-common/references/circuit-breaker.md` — failure taxonomy and stopping rules
+
+### Post-Deploy: Smart PR Flow
+
+If running in a PR context (branch ≠ `main`), after deployment completes:
+
+1. Check CI status via `gh pr checks` or MCP tools
+2. Apply label `infraops-ci-pass` or `infraops-needs-fix`
+3. If all gates pass and review approved, execute auto-merge
+4. See `.github/skills/github-operations/references/smart-pr-flow.md` for full protocol
 
 ## DO / DON'T
 

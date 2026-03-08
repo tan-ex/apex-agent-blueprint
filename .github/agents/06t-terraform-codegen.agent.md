@@ -2,7 +2,7 @@
 name: 06t-Terraform CodeGen
 description: Expert Azure Terraform Infrastructure as Code specialist that creates near-production-ready Terraform configurations following best practices and Azure Verified Modules (AVM-TF) standards. Validates, tests, and ensures code quality.
 model: ["Claude Opus 4.6", "Claude Sonnet 4.6"]
-user-invokable: true
+user-invocable: true
 agents:
   [
     "terraform-lint-subagent",
@@ -15,7 +15,7 @@ tools:
     vscode/getProjectSetupInfo,
     vscode/installExtension,
     vscode/newWorkspace,
-    vscode/openSimpleBrowser,
+    browser,
     vscode/runCommand,
     vscode/askQuestions,
     vscode/vscodeAPI,
@@ -108,6 +108,7 @@ handoffs:
 3. **Read** artifact template files: `azure-artifacts/templates/04-preflight-check.template.md` + `05-implementation-reference.template.md`
 4. **Read** `.github/skills/terraform-patterns/SKILL.md` — patterns, AVM Known Pitfalls, module composition
 5. **Read** `.github/instructions/terraform-policy-compliance.instructions.md` — governance mandate, translation table
+6. **Read** `.github/skills/context-shredding/SKILL.md` — runtime compression for large plan/governance artifacts
 
 > When verifying AVM-TF module variables or `azurerm` argument types,
 > read `.github/skills/microsoft-code-reference/SKILL.md` on-demand.

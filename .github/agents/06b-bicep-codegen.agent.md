@@ -2,7 +2,7 @@
 name: 06b-Bicep CodeGen
 description: Expert Azure Bicep Infrastructure as Code specialist that creates near-production-ready Bicep templates following best practices and Azure Verified Modules standards. Validates, tests, and ensures code quality.
 model: ["Claude Opus 4.6", "Claude Sonnet 4.6"]
-user-invokable: true
+user-invocable: true
 agents:
   ["bicep-lint-subagent", "bicep-review-subagent", "challenger-review-subagent"]
 tools:
@@ -11,7 +11,7 @@ tools:
     vscode/getProjectSetupInfo,
     vscode/installExtension,
     vscode/newWorkspace,
-    vscode/openSimpleBrowser,
+    browser,
     vscode/runCommand,
     vscode/askQuestions,
     vscode/vscodeAPI,
@@ -99,6 +99,7 @@ handoffs:
 3. **Read** artifact template files: `azure-artifacts/templates/04-preflight-check.template.md` + `05-implementation-reference.template.md`
 4. **Read** `.github/skills/azure-bicep-patterns/SKILL.md` — hub-spoke, PE, diagnostics, managed identity, module composition
 5. **Read** `.github/instructions/bicep-policy-compliance.instructions.md` — governance mandate, dynamic tag list
+6. **Read** `.github/skills/context-shredding/SKILL.md` — runtime compression for large plan/governance artifacts
 
 > When verifying AVM module parameters or API versions, read `.github/skills/microsoft-code-reference/SKILL.md` on-demand.
 

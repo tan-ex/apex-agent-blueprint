@@ -4,7 +4,7 @@
  *
  * Validates that all agent files conform to VS Code 1.109 agent definition spec:
  * - Required frontmatter fields present
- * - user-invokable correctly set (false/never for subagents)
+ * - user-invocable correctly set (false/never for subagents)
  * - agents list syntax valid
  * - handoffs have send property
  * - model fallback configuration present
@@ -16,15 +16,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseFrontmatter } from "./_lib/parse-frontmatter.mjs";
+import { getAgents } from "./_lib/workspace-index.mjs";
 
-const AGENTS_DIR = ".github/agents";
-const SUBAGENTS_DIR = ".github/agents/_subagents";
+// Required fields for main agents (user-invocable: true)
+const MAIN_AGENT_REQUIRED = ["name", "description", "user-invocable", "tools"];
 
-// Required fields for main agents (user-invokable: true)
-const MAIN_AGENT_REQUIRED = ["name", "description", "user-invokable", "tools"];
-
-// Required fields for subagents (user-invokable: false/never)
-const SUBAGENT_REQUIRED = ["name", "description", "user-invokable", "tools"];
+// Required fields for subagents (user-invocable: false/never)
+const SUBAGENT_REQUIRED = ["name", "description", "user-invocable", "tools"];
 
 // Recommended fields for 1.109 orchestration
 const RECOMMENDED_FIELDS = ["agents", "model"];
@@ -60,7 +58,7 @@ function validateAgent(filePath, isSubagent) {
   if (!frontmatter) {
     console.error(`❌ ${relativePath}: No frontmatter found`);
     console.error(
-      `  Fix: Add YAML frontmatter at the top: ---\nname: ...\ndescription: ...\nuser-invokable: true\ntools: []\n---`,
+      `  Fix: Add YAML frontmatter at the top: ---\nname: ...\ndescription: ...\nuser-invocable: true\ntools: []\n---`,
     );
     errors++;
     return;
@@ -79,29 +77,29 @@ function validateAgent(filePath, isSubagent) {
     }
   }
 
-  // Validate user-invokable for subagents
+  // Validate user-invocable for subagents
   if (isSubagent) {
-    const userInvokable = frontmatter["user-invokable"];
+    const userInvokable = frontmatter["user-invocable"];
     if (
       userInvokable !== "false" &&
       userInvokable !== "never" &&
       userInvokable !== false
     ) {
       console.error(
-        `❌ ${relativePath}: Subagent must have user-invokable: false or never (got: ${userInvokable})`,
+        `❌ ${relativePath}: Subagent must have user-invocable: false or never (got: ${userInvokable})`,
       );
       errors++;
     }
   } else {
-    // Main agents should be user-invokable
-    const userInvokable = frontmatter["user-invokable"];
+    // Main agents should be user-invocable
+    const userInvokable = frontmatter["user-invocable"];
     if (
       userInvokable !== "true" &&
       userInvokable !== "always" &&
       userInvokable !== true
     ) {
       console.warn(
-        `⚠️  ${relativePath}: Main agent should have user-invokable: true (got: ${userInvokable})`,
+        `⚠️  ${relativePath}: Main agent should have user-invocable: true (got: ${userInvokable})`,
       );
       warnings++;
     }
@@ -173,48 +171,30 @@ function findAgentFiles(dir) {
     .map((f) => path.join(dir, f));
 }
 
-/**
- * Main validation function
- */
-function main() {
-  console.log("🔍 VS Code 1.109 Agent Frontmatter Validator\n");
+console.log("\n🔍 Agent Frontmatter Validator\n");
 
-  // Find all agent files using fs
-  const mainAgents = findAgentFiles(AGENTS_DIR);
-  const subAgents = findAgentFiles(SUBAGENTS_DIR);
+const agents = getAgents();
+let mainCount = 0;
+let subCount = 0;
 
-  console.log(
-    `Found ${mainAgents.length} main agents and ${subAgents.length} subagents\n`,
-  );
-
-  console.log("=== Main Agents ===");
-  for (const agentFile of mainAgents) {
-    validateAgent(agentFile, false);
-  }
-
-  console.log("\n=== Subagents ===");
-  for (const agentFile of subAgents) {
-    validateAgent(agentFile, true);
-  }
-
-  console.log("\n" + "=".repeat(60));
-  if (errors > 0) {
-    console.error(
-      `❌ Validation FAILED: ${errors} error(s), ${warnings} warning(s)`,
-    );
-    process.exit(1);
-  } else if (warnings > 0) {
-    console.log(`⚠️  Validation passed with ${warnings} warning(s)`);
-    process.exit(0);
-  } else {
-    console.log("✅ All agents passed validation");
-    process.exit(0);
-  }
+for (const [file, agent] of agents) {
+  validateAgent(agent.path, agent.isSubagent);
+  if (agent.isSubagent) subCount++;
+  else mainCount++;
 }
 
-try {
-  main();
-} catch (err) {
-  console.error("Fatal error:", err);
+console.log(`\nFound ${mainCount} main agents and ${subCount} subagents`);
+
+console.log("\n" + "=".repeat(60));
+if (errors > 0) {
+  console.error(
+    `❌ Validation FAILED: ${errors} error(s), ${warnings} warning(s)`,
+  );
   process.exit(1);
+} else if (warnings > 0) {
+  console.log(`⚠️  Validation passed with ${warnings} warning(s)`);
+  process.exit(0);
+} else {
+  console.log("✅ All agents passed validation");
+  process.exit(0);
 }
