@@ -1,34 +1,23 @@
 # Upstream Sync
-# This repository is a template consumer of jonathan-vella/azure-agentic-infraops.
-# Upstream ALWAYS wins for framework files. Consumer-owned files are listed in EXCLUDE_PATHS.
-# Synced folders become exact replicas — files deleted upstream are deleted here too.
+# This repository is a downstream accelerator of jonathan-vella/azure-agentic-infraops.
+# Upstream ALWAYS wins for all files EXCEPT the paths listed in EXCLUDE_PATHS below.
 #
-# ALWAYS synced from upstream (upstream wins — exact replica):
+# ALWAYS synced from upstream (upstream wins):
 #   .devcontainer/          .vscode/               .github/agents/
 #   .github/skills/         .github/instructions/  .github/prompts/
-#   .github/data/           .github/workflows/     .github/copilot-instructions.md
+#   .github/data/                                .github/copilot-instructions.md
 #   .github/CODEOWNERS      .github/ISSUE_TEMPLATE/ .github/PULL_REQUEST_TEMPLATE.md
-#   scripts/                mcp/azure-pricing-mcp/
-#   agent-output/           docs/                  infra/
-#   Root config: lefthook.yml  commitlint.config.js  pyproject.toml
-#     requirements.txt  .vale.ini  .vale/  .yamllint.yml
-#     .markdownlint-cli2.jsonc  .markdown-link-check.json  .gitattributes
+#   docs/                   scripts/               mcp/azure-pricing-mcp/
+#   package.json            lefthook.yml           commitlint.config.js
+#   *.json/.yml/.toml/.txt (root config files)
 #
-# NEVER synced (consumer-owned, excluded):
-#   .github/workflows/weekly-upstream-sync.yml → this workflow (unique to this repo)
-#   README.md               → consumer project README
-#   CHANGELOG.md            → consumer release history
-#   VERSION.md              → consumer version source of truth
-#   CONTRIBUTING.md         → consumer contribution guidelines
-#   CONTRIBUTORS.md         → consumer contributor credits
-#   package.json            → consumer package identity & version
+# NEVER synced (accelerator-specific, excluded):
+#   agent-output/           → user-generated project outputs
+#   infra/bicep/            → user project Bicep templates
+#   .github/workflows/      → keep repository workflows as-is (GITHUB_TOKEN cannot push workflow changes)
+#   README.md               → accelerator-specific README
 #
-# Exclusion matching: entries with trailing / use prefix match (directories),
-# entries without trailing / use exact match (files). This prevents README.md
-# from accidentally excluding README.md.bak, etc.
-#
-# NOTE: New upstream lint scripts in package.json won't auto-arrive.
-# Review upstream diff manually during sync PR review.
+# To sync workflow files from upstream, run locally: npm run sync:workflows
 #
 # Runs weekly and on manual dispatch. Always opens a PR for human review — no auto-merge.
 
@@ -59,16 +48,12 @@ env:
   UPSTREAM_REF: main
   SYNC_BRANCH: automation/upstream-sync
   # Only these paths are excluded — everything else syncs from upstream.
-  # Trailing / = directory (prefix match). No trailing / = file (exact match).
   EXCLUDE_PATHS: |
-    .github/workflows/weekly-upstream-sync.yml
-    node_modules/
+    .github/workflows/
+    agent-output/
+    infra/bicep/
     README.md
-    CHANGELOG.md
-    VERSION.md
-    CONTRIBUTING.md
-    CONTRIBUTORS.md
-    package.json
+    node_modules/
 
 jobs:
   sync:
@@ -99,61 +84,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Strategy: delete local-only files not in upstream (exact replica),
-          # overlay everything from upstream, then restore excluded paths.
-          # No merge = no conflicts. Upstream always wins unconditionally.
-
-          # Helper: check if a file path matches any EXCLUDE_PATHS entry.
-          # Trailing / entries use prefix match (directories).
-          # Non-slash entries use exact match (files).
-          is_excluded() {
-            local file="$1"
-            while IFS= read -r exc; do
-              [ -z "$exc" ] && continue
-              if [[ "$exc" == */ ]]; then
-                [[ "$file" == "$exc"* ]] && return 0
-              else
-                [[ "$file" == "$exc" ]] && return 0
-              fi
-            done <<< "${EXCLUDE_PATHS}"
-            return 1
-          }
-
           BASE_SHA=$(git rev-parse HEAD)
-
-          # Create (or reset) the sync branch from our current base
           git checkout -B "${SYNC_BRANCH}"
 
-          # --- Deletion pass: remove files that exist locally but not upstream ---
-          # This is what makes synced folders exact replicas.
-          comm -23 \
-            <(git ls-tree -r --name-only HEAD | sort) \
-            <(git ls-tree -r --name-only "upstream/${UPSTREAM_REF}" | sort) \
-          | while IFS= read -r file; do
-            if is_excluded "$file"; then
-              echo "  [skip] $file (excluded)"
-              continue
-            fi
-            git rm --cached --ignore-unmatch -- "$file" > /dev/null 2>&1 || true
-            rm -f -- "$file" 2>/dev/null || true
-          done
-
-          # --- Overlay pass: take everything from upstream ---
+          # Take EVERYTHING from upstream into the working tree and index
           git checkout "upstream/${UPSTREAM_REF}" -- .
 
-          # --- Restore excluded paths from our base branch ---
-          while IFS= read -r path; do
-            [ -z "$path" ] && continue
-
-            # Remove whatever upstream put in this path
+          # Restore each excluded path from the base branch.
+          # Hardcoded list — must match EXCLUDE_PATHS env.
+          for path in .github/workflows/ agent-output/ infra/bicep/ README.md; do
             git rm -r --cached --ignore-unmatch -- "$path" > /dev/null 2>&1 || true
             rm -rf -- "$path" 2>/dev/null || true
-
-            # Restore our base version (if the path existed in our repo)
             if git ls-tree --name-only "${BASE_SHA}" -- "$path" | grep -q .; then
-              git checkout "${BASE_SHA}" -- "$path" 2>/dev/null || true
+              git checkout "${BASE_SHA}" -- "$path"
             fi
-          done <<< "${EXCLUDE_PATHS}"
+          done
 
           # Detect whether anything changed relative to the base branch
           changed=false
@@ -174,7 +119,7 @@ jobs:
       - name: Assert excluded paths are unchanged
         if: steps.sync.outputs.changed == 'true'
         run: |
-          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/weekly-upstream-sync\.yml$|node_modules/|README\.md$|CHANGELOG\.md$|VERSION\.md$|CONTRIBUTING\.md$|CONTRIBUTORS\.md$|package\.json$)' || true)
+          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|agent-output/|infra/bicep/|README\.md$)' || true)
           if [ -n "$leaked" ]; then
             echo "::error::Excluded paths were modified by sync."
             echo "$leaked" | sed 's/^/  /'
@@ -193,9 +138,7 @@ jobs:
           git commit -m "chore(sync): upstream sync from ${UPSTREAM_REPO}@${UPSTREAM_REF}
 
           Synced at $(date -u +"%Y-%m-%d %H:%M UTC")
-          Exact replica sync — files deleted upstream are deleted here too.
-          Excluded (consumer-owned): weekly-upstream-sync.yml README.md
-            CHANGELOG.md VERSION.md CONTRIBUTING.md CONTRIBUTORS.md package.json" \
+          Excluded: agent-output/ infra/bicep/ .github/workflows/ README.md" \
             --allow-empty
 
           set +e
@@ -227,20 +170,18 @@ jobs:
         run: |
           UPSTREAM_SHA=$(git rev-parse "upstream/${UPSTREAM_REF}" 2>/dev/null | cut -c1-7 || echo "unknown")
 
-          PR_BODY="Automated exact-replica sync from \`${UPSTREAM_REPO}@${UPSTREAM_REF}\` (\`${UPSTREAM_SHA}\`). **Upstream always wins for framework files. Files deleted upstream are deleted here too.**
+          PR_BODY="Automated full sync from \`${UPSTREAM_REPO}@${UPSTREAM_REF}\` (\`${UPSTREAM_SHA}\`). **Upstream always wins.**
 
           Triggered by: \`${{ github.event_name }}\`
 
-          **Always synced from upstream (exact replica):**
+          **Always synced from upstream:**
           \`.devcontainer/\` · \`.vscode/\` · \`.github/agents/\` · \`.github/skills/\` · \`.github/instructions/\`
-          \`.github/prompts/\` · \`.github/data/\` · \`.github/workflows/\` · \`.github/copilot-instructions.md\`
-          \`scripts/\` · \`mcp/azure-pricing-mcp/\` · \`agent-output/\` · \`docs/\` · \`infra/\` · root config files
+          \`.github/prompts/\` · \`.github/data/\` · \`.github/copilot-instructions.md\`
+          \`docs/\` · \`scripts/\` · \`mcp/azure-pricing-mcp/\` · all root config files
 
-          **Excluded (consumer-owned, never overwritten):**
-          \`.github/workflows/weekly-upstream-sync.yml\` · \`README.md\` · \`CHANGELOG.md\` · \`VERSION.md\`
-          \`CONTRIBUTING.md\` · \`CONTRIBUTORS.md\` · \`package.json\`
+          **Excluded (accelerator-specific, never overwritten):**
+          \`agent-output/\` · \`infra/bicep/\` · \`.github/workflows/\` · \`README.md\`
 
-          > **Review note**: New upstream lint scripts in \`package.json\` won't appear here — check upstream diff manually.
           > Policy: always manual review, no auto-merge."
 
           # Update existing open PR or create new one
