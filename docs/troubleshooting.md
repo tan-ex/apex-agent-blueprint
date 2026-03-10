@@ -1,20 +1,34 @@
-# Troubleshooting Guide
+---
+toc_depth: 2
+---
+
+<div align="center">
+  <img src="../assets/images/hero-troubleshooting.jpg"
+    width="100%" height="250" style="object-fit: cover; border-radius: 10px;"
+    alt="Diagnostic tools and troubleshooting"/>
+</div>
+
+# :material-wrench-outline: Troubleshooting Guide
 
 > Common issues and solutions for Agentic InfraOps
 
-## Agent Personas Quick Reference
+## :material-account-card-outline: Agent Personas Quick Reference
 
 | Agent              | Persona       | Common Issues                    |
 | ------------------ | ------------- | -------------------------------- |
 | InfraOps Conductor | 🎼 Maestro    | Subagent invocation not working  |
 | requirements       | 📜 Scribe     | Not appearing in list            |
 | architect          | 🏛️ Oracle     | MCP pricing not connecting       |
-| bicep-plan         | 📐 Strategist | Governance discovery failing     |
-| bicep-code         | ⚒️ Forge      | Validation subagents not running |
-| deploy             | 🚀 Envoy      | Azure auth issues                |
+| bicep-planner      | 📐 Strategist | Governance discovery failing     |
+| terraform-planner  | 📐 Strategist | Governance discovery failing     |
+| bicep-codegen      | ⚒️ Forge      | Validation subagents not running |
+| terraform-codegen  | ⚒️ Forge      | Provider version mismatches      |
+| bicep-deploy       | 🚀 Envoy      | Azure auth issues                |
+| terraform-deploy   | 🚀 Envoy      | State lock / init failures       |
+| challenger         | ⚔️ Challenger | —                                |
 | diagnose           | 🔍 Sentinel   | —                                |
 
-## Quick Decision Tree
+## :material-sitemap-outline: Quick Decision Tree
 
 ```mermaid
 %%{init: {'theme':'neutral'}}%%
@@ -24,7 +38,8 @@ flowchart TD
     TYPE -->|"Agent won't start"| AGENT
     TYPE -->|"Skill not activating"| SKILL
     TYPE -->|"Deployment fails"| DEPLOY
-    TYPE -->|"Validation errors"| VALIDATE
+    TYPE -->|"Bicep errors"| VALIDATE_B
+    TYPE -->|"Terraform errors"| VALIDATE_T
     TYPE -->|"Azure auth"| AUTH
 
     AGENT --> AGENT1["Check: Ctrl+Shift+A<br/>shows agent list?"]
@@ -37,7 +52,8 @@ flowchart TD
 
     DEPLOY --> DEPLOY1["Run preflight first:<br/>deploy agent preflight check"]
 
-    VALIDATE --> VALIDATE1["Run: npm run validate"]
+    VALIDATE_B --> VALIDATE_B1["Run: bicep build main.bicep<br/>bicep lint main.bicep"]
+    VALIDATE_T --> VALIDATE_T1["Run: terraform validate<br/>terraform fmt -check"]
 
     AUTH --> AUTH1["Run: az login"]
 
@@ -45,13 +61,12 @@ flowchart TD
     style AGENT fill:#fff3e0
     style SKILL fill:#f3e5f5
     style DEPLOY fill:#c8e6c9
-    style VALIDATE fill:#fce4ec
+    style VALIDATE_B fill:#fce4ec
+    style VALIDATE_T fill:#e8d5f5
     style AUTH fill:#fff9c4
 ```
 
----
-
-## Common Issues
+## :material-alert-circle-outline: Common Issues
 
 ### 1. Agent Not Appearing in List
 
@@ -75,9 +90,7 @@ head -20 .github/agents/requirements.agent.md
 
 Reload VS Code: `Ctrl+Shift+P` → "Developer: Reload Window"
 
----
-
-### 1.5. Conductor/Subagent Invocation Not Working (VS Code 1.109+)
+### 2. Conductor/Subagent Invocation Not Working (VS Code 1.109+)
 
 **Symptom**: The InfraOps Conductor (🎼 Maestro) doesn't delegate to specialized agents.
 Responses are instant, no terminal commands execute, no files are created.
@@ -119,9 +132,7 @@ Responses are instant, no terminal commands execute, no files are created.
 **Note**: Workspace settings (`.vscode/settings.json`) may not be sufficient
 for experimental features. User settings take precedence.
 
----
-
-### 2. Skill Not Activating Automatically
+### 3. Skill Not Activating Automatically
 
 **Symptom**: Prompt doesn't trigger expected skill.
 
@@ -145,9 +156,7 @@ Check skill triggers in `SKILL.md`:
 cat .github/skills/azure-diagrams/SKILL.md | head -30
 ```
 
----
-
-### 3. Deployment Fails with Azure Policy Error
+### 4. Deployment Fails with Azure Policy Error
 
 **Symptom**: `az deployment group create` fails with policy violation.
 
@@ -165,32 +174,91 @@ cat .github/skills/azure-diagrams/SKILL.md | head -30
 "Run deployment preflight for {project}"
 ```
 
----
-
-### 4. Bicep Build Errors
+### 5. Bicep Build Errors
 
 **Symptom**: `bicep build` fails.
 
-**Common causes**:
+=== "Bicep"
+
+    **Common causes**:
+
+    ```bash
+    # Check Bicep CLI version
+    bicep --version  # Should be 0.30+
+
+    # Validate syntax
+    bicep lint infra/bicep/{project}/main.bicep
+    ```
+
+    **AVM module not found**:
+
+    ```bash
+    # Restore modules from registry
+    bicep restore infra/bicep/{project}/main.bicep
+    ```
+
+### 5t. Terraform Validation Errors
+
+**Symptom**: `terraform validate` or `terraform plan` fails.
+
+=== "Terraform"
+
+    **Common causes and solutions**:
+
+    ```bash
+    # Check Terraform CLI version
+    terraform --version  # Should be 1.5+
+
+    # Initialize providers (run from project directory)
+    cd infra/terraform/{project}
+    terraform init -backend=false
+
+    # Check formatting
+    terraform fmt -check -recursive
+
+    # Validate configuration
+    terraform validate
+    ```
+
+    **Provider version mismatch**:
+
+    ```bash
+    # Lock providers to specific versions
+    terraform providers lock -platform=linux_amd64
+    ```
+
+    **AVM-TF module not found**:
+
+    Verify the module source in `main.tf` matches the Terraform Registry path:
+
+    ```hcl
+    # Correct AVM-TF module source pattern
+    module "example" {
+      source  = "Azure/avm-res-<provider>-<resource>/azurerm"
+      version = "~> 0.x"
+    }
+    ```
+
+    **TFLint errors**:
+
+    ```bash
+    # Run TFLint with Azure ruleset
+    tflint --init
+    tflint --recursive
+    ```
+
+**State lock issues**:
+
+!!! danger "Destructive Operation"
+
+    `terraform force-unlock` can corrupt state if used while another operation is
+    genuinely in progress. Only use when you are certain the lock is stale.
 
 ```bash
-# Check Bicep CLI version
-bicep --version  # Should be 0.30+
-
-# Validate syntax
-bicep lint infra/bicep/{project}/main.bicep
+terraform force-unlock <lock-id>
 ```
 
-**AVM module not found**:
-
-```bash
-# Restore modules from registry
-bicep restore infra/bicep/{project}/main.bicep
-```
-
----
-
-### 5. Azure Authentication Issues
+### 6. Azure Authentication Issues
 
 **Symptom**: "Not logged in" or subscription errors.
 
@@ -213,9 +281,7 @@ For Service Principal:
 az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
 ```
 
----
-
-### 6. Artifact Validation Failures
+### 7. Artifact Validation Failures
 
 **Symptom**: `npm run validate` fails.
 
@@ -238,9 +304,7 @@ cat scripts/validate-artifact-templates.mjs | grep -A20 "ARTIFACT_HEADINGS"
 diff -u .github/skills/azure-artifacts/templates/01-requirements.template.md agent-output/{project}/01-requirements.md
 ```
 
----
-
-### 7. MCP Server Not Responding
+### 8. MCP Server Not Responding
 
 **Symptom**: Azure Pricing MCP calls fail.
 
@@ -257,9 +321,15 @@ python3 --version  # Should be 3.10+
 cd mcp/azure-pricing-mcp && pip install -r requirements.txt
 ```
 
----
+!!! tip "Graceful degradation"
 
-### 8. Devcontainer Build Fails
+    If MCP servers are temporarily unreachable, the workflow degrades gracefully.
+    Steps 1-5 can proceed without MCP — agents skip real-time pricing lookups
+    and use documented defaults. Governance discovery in Step 4 uses Azure CLI
+    auth, not MCP. Only Step 2 cost estimation and Step 7 as-built cost updates
+    depend directly on the Pricing MCP server.
+
+### 9. Dev Container Build Fails
 
 **Symptom**: Dev container won't start.
 
@@ -282,9 +352,7 @@ Check Docker is running:
 docker ps
 ```
 
----
-
-### 9. Orphaned VS Code Extensions Injecting Unwanted Instructions
+### 10. Orphaned VS Code Extensions Injecting Unwanted Instructions
 
 **Symptom**: Copilot loads instruction files from extensions that are not listed in `devcontainer.json`
 (e.g., `ms-azuretools.vscode-azure-github-copilot`). You may see unexpected rules or context being
@@ -316,9 +384,7 @@ extension on disk, regardless of whether it is actively managed.
 > If this happens, rebuild without cache:
 > `Ctrl+Shift+P` → "Dev Containers: Rebuild Container Without Cache".
 
----
-
-### 10. Git Push Fails with Lefthook Errors
+### 11. Git Push Fails with Lefthook Errors
 
 **Symptom**: Pre-commit hooks fail.
 
@@ -332,13 +398,16 @@ extension on disk, regardless of whether it is actively managed.
 
 **Skip hooks temporarily** (not recommended):
 
+!!! danger "Use with caution"
+
+    Skipping hooks bypasses all validation. Only use for emergency fixes that you will
+    immediately follow up with a proper commit.
+
 ```bash
 git commit --no-verify -m "fix: temporary"
 ```
 
----
-
-### 11. Handoff Prompt Not Working
+### 12. Handoff Prompt Not Working
 
 **Symptom**: Agent handoff button does nothing.
 
@@ -363,8 +432,6 @@ Ensure target agent exists:
 ls .github/agents/architect.agent.md
 ```
 
----
-
 ## Diagnostic Commands
 
 ### Environment Check
@@ -372,6 +439,8 @@ ls .github/agents/architect.agent.md
 ```bash
 # All-in-one status
 echo "=== Bicep ===" && bicep --version
+echo "=== Terraform ===" && terraform --version
+echo "=== TFLint ===" && tflint --version
 echo "=== Azure CLI ===" && az version --output table
 echo "=== Node ===" && node --version
 echo "=== Python ===" && python3 --version
@@ -382,10 +451,15 @@ echo "=== Git ===" && git --version
 
 ```bash
 # Validate all artifacts
-npm run validate
+npm run validate:all
 
-# Check for broken links
-npm run check-links
+# Bicep validation
+bicep lint infra/bicep/{project}/main.bicep
+bicep build infra/bicep/{project}/main.bicep
+
+# Terraform validation
+cd infra/terraform/{project} && terraform init -backend=false && terraform validate
+npm run validate:terraform
 
 # Lint markdown
 npm run lint:md
@@ -404,11 +478,9 @@ az group list --output table
 az deployment group list -g {resource-group} --output table
 ```
 
----
-
 ## Getting Help
 
-1. **Check prompt guide**: [Prompt Guide](prompt-guide/) has usage examples
+1. **Check prompt guide**: [Prompt Guide](prompt-guide/index.md) has usage examples
 2. **Read agent definitions**: `.github/agents/*.agent.md`
 3. **Check skill files**: `.github/skills/*/SKILL.md`
 4. **Review templates**: `.github/skills/azure-artifacts/templates/`
