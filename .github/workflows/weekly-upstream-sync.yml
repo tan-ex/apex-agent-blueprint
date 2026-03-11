@@ -47,6 +47,10 @@ env:
   UPSTREAM_REPO: jonathan-vella/azure-agentic-infraops
   UPSTREAM_REF: main
   SYNC_BRANCH: automation/upstream-sync
+  # Opt into Node.js 24 runtime for all JavaScript actions (actions/checkout etc.)
+  # Required before June 2nd, 2026 when Node.js 20 is fully retired on GitHub runners.
+  # See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   # Only these paths are excluded — everything else syncs from upstream.
   EXCLUDE_PATHS: |
     .github/workflows/
