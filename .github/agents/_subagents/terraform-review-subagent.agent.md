@@ -5,7 +5,7 @@ model: "Claude Sonnet 4.6 (copilot)"
 user-invocable: false
 disable-model-invocation: false
 agents: []
-tools: [read, search, web, vscode/askQuestions, "azure-mcp/*"]
+tools: [read, search, web, "azure-mcp/*"]
 ---
 
 # Terraform Review Subagent
@@ -20,7 +20,8 @@ You are a **CODE REVIEW SUBAGENT** called by a parent CONDUCTOR agent.
 
 Before starting any review, read these skills for domain knowledge:
 
-1. Read `.github/skills/azure-defaults/SKILL.md` — AVM versions, CAF naming, required tags, security baseline, region defaults
+1. Read `.github/skills/azure-defaults/SKILL.digest.md` — AVM versions,
+   CAF naming, required tags, security baseline, region defaults
 2. Read `.github/skills/iac-common/SKILL.md` — governance compliance checks, unique suffix patterns, shared IaC review procedures
 
 ## Core Workflow
@@ -37,7 +38,6 @@ Always return results in this exact format:
 
 ```text
 TERRAFORM CODE REVIEW
-─────────────────────
 Status: [APPROVED|NEEDS_REVISION|FAILED]
 Module: {path/to/module}
 Files Reviewed: {count}

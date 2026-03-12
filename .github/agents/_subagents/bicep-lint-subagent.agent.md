@@ -11,7 +11,6 @@ tools:
     read,
     search,
     web,
-    vscode/askQuestions,
     "azure-mcp/*",
     "bicep/*",
     ms-azuretools.vscode-azureresourcegroups/azureActivityLog,
@@ -43,7 +42,6 @@ Always return results in this exact format:
 
 ```text
 BICEP LINT RESULT
-─────────────────
 Status: [PASS|FAIL]
 Template: {path/to/main.bicep}
 

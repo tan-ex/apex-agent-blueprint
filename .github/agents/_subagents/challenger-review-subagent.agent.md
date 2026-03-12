@@ -1,12 +1,12 @@
 ---
 name: challenger-review-subagent
 description: "Adversarial review subagent that challenges Azure infrastructure artifacts. Finds untested assumptions, governance gaps, WAF blind spots, and architectural weaknesses. Returns structured JSON findings to the parent agent. Supports 3-pass rotating-lens reviews for critical steps."
-model: "Claude Sonnet 4.6 (copilot)"
-# Model rationale: Sonnet 4.6 for all review passes. Provides strong adversarial
-# analysis with lower latency than Opus. Validated via A/B comparison in Phase 10.
+model: "GPT-5.4"
+# Model rationale: GPT-5.4 for pass 1 (security-governance) and comprehensive reviews.
+# Strong logical reasoning for deep policy cross-reference analysis.
 user-invocable: false
 agents: []
-tools: [read, search, web, vscode/askQuestions, "azure-mcp/*"]
+tools: [read, search, web, "azure-mcp/*"]
 ---
 
 # Challenger Review Subagent
@@ -23,8 +23,8 @@ The parent agent writes the output file — you do NOT write files.
 
 **Before doing ANY work**, read these skills in order:
 
-1. **Read** `.github/skills/golden-principles/SKILL.md` — agent operating principles and invariants
-2. **Read** `.github/skills/azure-defaults/SKILL.md` — regions, tags, naming, AVM, security baselines, governance
+1. **Read** `.github/skills/golden-principles/SKILL.digest.md` — agent operating principles and invariants
+2. **Read** `.github/skills/azure-defaults/SKILL.digest.md` — regions, tags, naming, AVM, security baselines, governance
 3. **Read** `.github/skills/azure-defaults/references/adversarial-checklists.md` — per-category and per-artifact-type checklists
 4. **Read** `.github/instructions/bicep-policy-compliance.instructions.md` — governance enforcement rules
 
@@ -79,9 +79,19 @@ Scope Risk · Architectural Weakness · Governance Gap · WAF Blind Spot.
 
 ## Severity Levels
 
-- **must_fix**: Deployment likely fails or non-compliant infrastructure
-- **should_fix**: Significant risk that should be mitigated
-- **suggestion**: Minor concern worth considering
+- **must_fix**: Will cause **deployment failure** (Azure Policy Deny block, missing required config,
+  broken dependency chain) or **security breach** (public data exposure, no authentication,
+  plaintext secrets, missing encryption). Must be fixable in the current step's artifact.
+- **should_fix**: Violates WAF best practice or creates **operational risk** that won't block
+  deployment but degrades production quality (missing alerts, single points of failure,
+  incomplete diagnostics). Must be addressable in the current step.
+- **suggestion**: Nice-to-have improvement, belongs in a later step (e.g., Step 7 as-built docs),
+  or is a "consider for v2" item. Use for: failover-region design, certificate lifecycle docs,
+  post-launch right-sizing checkpoints, operational runbook content.
+
+> **Severity calibration rule**: If a finding describes content that belongs in
+> Step 7 (as-built documentation, ops runbook, DR plan), classify it as `suggestion`,
+> not `should_fix`. The plan/code is a deployment blueprint, not an ops manual.
 
 ## Adversarial Checklists
 
@@ -95,7 +105,7 @@ per-category and per-artifact-type checklists, plus Azure Infrastructure Skeptic
 | Adversarial checklists & skepticism surfaces | `.github/skills/azure-defaults/references/adversarial-checklists.md`      |
 | Artifact-type-specific categories            | `.github/skills/azure-defaults/references/artifact-type-categories.md`    |
 | Adversarial review protocol                  | `.github/skills/azure-defaults/references/adversarial-review-protocol.md` |
-| Golden Principles                            | `.github/skills/golden-principles/SKILL.md`                               |
+| Golden Principles                            | `.github/skills/golden-principles/SKILL.digest.md`                        |
 
 ## Output Format
 

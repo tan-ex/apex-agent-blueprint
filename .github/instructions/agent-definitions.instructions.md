@@ -34,6 +34,9 @@ handoffs:
 ---
 ```
 
+For the complete frontmatter field reference (all supported keys, types, defaults),
+see `.github/instructions/references/agent-file-structure.md`.
+
 ### `name`
 
 - Clear, human-friendly display name.
@@ -58,6 +61,19 @@ handoffs:
 tools: [read/readFile, edit/createFile, agent, "azure-mcp/*"]
 ```
 
+### `argument-hint`
+
+- Optional hint text shown in the chat input field to guide users.
+- Keep it short and action-oriented (for example: `Describe the Azure workload you want to deploy`).
+
+### `agents`
+
+- List agent names available as subagents (must match `name` from target agent's frontmatter).
+- Use `*` to allow all agents, or `[]` to prevent any subagent use.
+- If `agents` is set, the `agent` tool MUST be included in `tools`.
+- **Override rule**: Explicitly listing an agent in `agents` overrides that agent's
+  `disable-model-invocation: true`. This lets coordinator agents access protected subagents.
+
 ### `handoffs`
 
 - Use `handoffs` to connect workflow steps (for example: Architect -> Bicep Plan -> Bicep Code).
@@ -67,10 +83,19 @@ tools: [read/readFile, edit/createFile, agent, "azure-mcp/*"]
 - Do not set `model` on individual handoff entries unless the target agent requires a specific
   model that differs from the agent's own frontmatter `model` value.
 
+### `user-invocable`
+
+- Boolean (default `true`). Controls whether the agent appears in the agents dropdown.
+- Set to `false` for subagents that should only be called by other agents.
+
+### `disable-model-invocation`
+
+- Boolean (default `false`). Prevents the agent from being invoked as a subagent by other agents.
+- Use when an agent should only be directly user-invoked, never delegated to.
+
 ### `model`
 
-> [!IMPORTANT]
-> **Model selection is intentional and must not be changed without explicit approval.**
+**Model selection is intentional and must not be changed without explicit approval.**
 
 Agents that specify `Claude Opus 4.6` as priority model do so deliberately:
 
@@ -82,15 +107,17 @@ Agents that specify `Claude Opus 4.6` as priority model do so deliberately:
 
 Current model assignments:
 
-| Agent        | Model                    | Rationale            |
-| ------------ | ------------------------ | -------------------- |
-| Requirements | Opus 4.6                 | Deep understanding   |
-| Architect    | Opus 4.6                 | WAF analysis + cost  |
-| Bicep Plan   | Opus 4.6                 | Efficient planning   |
-| Bicep Code   | Opus 4.6 / GPT-5.3-Codex | Code generation      |
-| Deploy       | GPT-5.3-Codex            | Deployment execution |
-| As-Built     | GPT-5.3-Codex            | Documentation gen    |
-| Subagents    | GPT-5.3-Codex            | Fast validation      |
+| Agent        | Model                      | Rationale            |
+| ------------ | -------------------------- | -------------------- |
+| Requirements | Opus 4.6                   | Deep understanding   |
+| Architect    | Opus 4.6                   | WAF analysis + cost  |
+| Design       | GPT-5.3-Codex              | Diagram generation   |
+| Bicep Plan   | Opus 4.6                   | Efficient planning   |
+| Bicep Code   | Opus 4.6 / Sonnet 4.6      | Code generation      |
+| Deploy       | Sonnet 4.6                 | Deployment execution |
+| As-Built     | GPT-5.3-Codex              | Documentation gen    |
+| Challenger   | GPT-5.4                    | Deep adversarial     |
+| Subagents    | GPT-5.3-Codex / Sonnet 4.6 | Fast validation      |
 
 **Rules:**
 
@@ -127,17 +154,19 @@ the 7-step workflow:
 Subagents live in `.github/agents/_subagents/` and are `user-invocable: false`. They isolate
 expensive or specialized work from their parent agent's context window.
 
-| Subagent                        | Parent Agent                | Purpose                                |
-| ------------------------------- | --------------------------- | -------------------------------------- |
-| `challenger-review-subagent`    | All workflow agents         | Adversarial review (1x or 3x passes)   |
-| `cost-estimate-subagent`        | Architect                   | Pricing MCP queries                    |
-| `governance-discovery-subagent` | Bicep Plan / Terraform Plan | Azure Policy REST API discovery        |
-| `bicep-lint-subagent`           | Bicep Code                  | `bicep build` + `bicep lint`           |
-| `bicep-review-subagent`         | Bicep Code                  | AVM/security/naming code review        |
-| `bicep-whatif-subagent`         | Bicep Deploy                | `az deployment group what-if`          |
-| `terraform-lint-subagent`       | Terraform Code              | `terraform fmt` + `terraform validate` |
-| `terraform-review-subagent`     | Terraform Code              | AVM-TF/security/naming code review     |
-| `terraform-plan-subagent`       | Terraform Deploy            | `terraform plan` change preview        |
+| Subagent                           | Parent Agent                | Purpose                                                 |
+| ---------------------------------- | --------------------------- | ------------------------------------------------------- |
+| `challenger-review-subagent`       | All workflow agents         | Adversarial review pass 1 / comprehensive (GPT-5.4)     |
+| `challenger-review-codex-subagent` | All workflow agents         | Adversarial review passes 2-3 (GPT-5.3-Codex)           |
+| `challenger-review-batch-subagent` | All workflow agents         | Batched passes 2+3 for complex projects (GPT-5.3-Codex) |
+| `cost-estimate-subagent`           | Architect                   | Pricing MCP queries                                     |
+| `governance-discovery-subagent`    | Bicep Plan / Terraform Plan | Azure Policy REST API discovery                         |
+| `bicep-lint-subagent`              | Bicep Code                  | `bicep build` + `bicep lint`                            |
+| `bicep-review-subagent`            | Bicep Code                  | AVM/security/naming code review                         |
+| `bicep-whatif-subagent`            | Bicep Deploy                | `az deployment group what-if`                           |
+| `terraform-lint-subagent`          | Terraform Code              | `terraform fmt` + `terraform validate`                  |
+| `terraform-review-subagent`        | Terraform Code              | AVM-TF/security/naming code review                      |
+| `terraform-plan-subagent`          | Terraform Deploy            | `terraform plan` change preview                         |
 
 Subagent definition rules:
 
@@ -147,6 +176,11 @@ Subagent definition rules:
 - Use `GPT-5.3-Codex` as the default model for fast, isolated execution.
 - Return structured results (PASS/FAIL, APPROVED/NEEDS_REVISION, etc.) so the parent
   agent can act on the verdict without parsing free-form text.
+
+### Deprecated: `infer`
+
+The `infer` field is deprecated. Use `user-invocable` and `disable-model-invocation` instead.
+If any agent still uses `infer`, migrate it to the new fields.
 
 ## Shared Defaults (Required)
 
@@ -167,8 +201,9 @@ When an agent delegates work to a subagent, follow this pattern:
 3. **Receive structured result** — the subagent returns a verdict/report
 4. **Integrate** — use the subagent's output in the parent agent's artifact
 
-This keeps the parent agent's context focused on its primary responsibility while the subagent
-handles isolated, tool-heavy work (pricing queries, REST API calls, lint runs).
+**Context isolation**: Subagents don't inherit parent instructions or conversation
+history. They receive only the task prompt. Pass all required context explicitly.
+VS Code can run multiple subagents in parallel when tasks are independent.
 
 ## Authoritative Standards (Avoid Drift)
 
@@ -187,6 +222,20 @@ If an agent contains an embedded template in its body, it MUST match the relevan
 - If you include fenced code blocks inside a fenced template, use quadruple fences (` ```` `)
   for the outer fence to avoid accidental termination.
 - Keep example templates realistic, but do not hardcode secrets, subscription IDs, or tenant IDs.
+
+## Body Content Guidelines
+
+- The agent body is **prepended to every user chat prompt** — keep it concise to preserve
+  context window budget.
+- Use `#tool:<tool-name>` to reference tools in body text (the official VS Code syntax).
+- Prefer plain Markdown over decorative formatting:
+  - **Bold** (`**text**`) is effective for emphasis — the model responds to it.
+  - `> [!CAUTION]` / `> [!IMPORTANT]` callouts render on GitHub but have no special
+    behavior in the agent runtime. Use bold headings instead to save tokens.
+  - Emoji prefixes (`✅`, `❌`) on list items are redundant when the list is already
+    under a `### DO` / `### DON'T` heading. Omit them.
+  - Step breadcrumb lines (e.g., `requirements → architect → [design] → ...`) duplicate
+    the `description` field. Omit them.
 
 ## Links
 

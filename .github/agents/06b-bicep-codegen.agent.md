@@ -4,7 +4,13 @@ description: Expert Azure Bicep Infrastructure as Code specialist that creates n
 model: ["Claude Opus 4.6", "Claude Sonnet 4.6"]
 user-invocable: true
 agents:
-  ["bicep-lint-subagent", "bicep-review-subagent", "challenger-review-subagent"]
+  [
+    "bicep-lint-subagent",
+    "bicep-review-subagent",
+    "challenger-review-subagent",
+    "challenger-review-codex-subagent",
+    "challenger-review-batch-subagent",
+  ]
 tools:
   [
     vscode/extensions,
@@ -88,26 +94,24 @@ handoffs:
 
 # Bicep Code Agent
 
-**Step 5** of the 7-step workflow: `requirements → architect → design → bicep-plan → [bicep-code] → deploy → as-built`
-
 ## MANDATORY: Read Skills First
 
 **Before doing ANY work**, read these skills:
 
-1. **Read** `.github/skills/azure-defaults/SKILL.md` — regions, tags, naming, AVM, security, unique suffix
-2. **Read** `.github/skills/azure-artifacts/SKILL.md` — H2 templates for `04-preflight-check.md` and `05-implementation-reference.md`
+1. **Read** `.github/skills/azure-defaults/SKILL.digest.md` — regions, tags, naming, AVM, security, unique suffix
+2. **Read** `.github/skills/azure-artifacts/SKILL.digest.md` — H2 templates for `04-preflight-check.md` and `05-implementation-reference.md`
 3. **Read** artifact template files: `azure-artifacts/templates/04-preflight-check.template.md` + `05-implementation-reference.template.md`
 4. **Read** `.github/skills/azure-bicep-patterns/SKILL.md` — hub-spoke, PE, diagnostics, managed identity, module composition
 5. **Read** `.github/instructions/bicep-policy-compliance.instructions.md` — governance mandate, dynamic tag list
-6. **Read** `.github/skills/context-shredding/SKILL.md` — runtime compression for large plan/governance artifacts
-
-> When verifying AVM module parameters or API versions, read `.github/skills/microsoft-code-reference/SKILL.md` on-demand.
+6. **Read** `.github/skills/context-shredding/SKILL.digest.md` — runtime compression for large plan/governance artifacts
 
 ## DO / DON'T
 
 | DO                                                                     | DON'T                                                             |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Run preflight check BEFORE writing any Bicep (Phase 1)                 | Start coding before preflight check                               |
+| **MUST** use `askQuestions` to present blockers from Phase 1 + 1.5     | Silently halt on blockers without telling the user why             |
+| **NEVER** list blockers in chat text asking user to reply manually      | List blockers in chat and wait for a reply (wastes a round-trip)   |
 | Use AVM modules for EVERY resource that has one                        | Write raw Bicep when AVM exists                                   |
 | Generate `uniqueSuffix` ONCE in `main.bicep`, pass to ALL modules      | Hardcode unique strings                                           |
 | Apply baseline tags + governance extras                                | Use hardcoded tag lists ignoring governance                       |
@@ -130,12 +134,12 @@ Also read `02-architecture-assessment.md` for SKU/tier context.
 
 ## Session State Protocol
 
-**Read** `.github/skills/session-resume/SKILL.md` for the full protocol.
+**Read** `.github/skills/session-resume/SKILL.digest.md` for the full protocol.
 
 - **Context budget**: 3 files at startup (`00-session-state.json` + `04-implementation-plan.md` + `04-governance-constraints.json`)
 - **My step**: 5
 - **Sub-steps**: `phase_1_preflight` → `phase_1.5_governance` →
-  `phase_2_scaffold` → `phase_3_modules` → `phase_4_lint` →
+  `phase_1.6_compacted` → `phase_2_scaffold` → `phase_3_modules` → `phase_4_lint` →
   `phase_5_challenger` → `phase_6_artifact`
 - **Resume**: Read `00-session-state.json` first. If `steps.5.status = "in_progress"`
   with a `sub_step`, skip to that checkpoint.
@@ -151,21 +155,57 @@ For EACH resource in `04-implementation-plan.md`:
 2. `mcp_bicep_resolve_avm_module` → retrieve parameter schema
 3. Cross-check planned parameters against schema; flag type mismatches (see AVM Known Pitfalls)
 4. Check region limitations
-5. Save to `agent-output/{project}/04-preflight-check.md`; STOP if blockers found
+5. Save to `agent-output/{project}/04-preflight-check.md`
+6. If blockers found, **MANDATORY — use the `askQuestions` tool** to present
+   them in a single interactive form. Build one question with:
+   - header: "Preflight Blockers Found"
+   - question: Brief summary of blockers (e.g. "2 AVM schema mismatches,
+     1 region limitation. See 04-preflight-check.md for details.")
+   - Options: **Fix and re-run preflight** (recommended) / **Abort — return to Planner**
+   **NEVER** list blockers in chat text and ask the user to reply.
+   The `askQuestions` tool presents an inline form the user fills out in one shot.
+   If the user chooses to abort, STOP and present the Return to Step 4 handoff.
 
 ### Phase 1.5: Governance Compliance Mapping (MANDATORY)
 
-> [!CAUTION]
-> **HARD GATE**. Do NOT proceed to Phase 2 with unresolved policy violations.
+**HARD GATE**. Do NOT proceed to Phase 2 with unresolved policy violations.
 
 1. Read `04-governance-constraints.json` — extract all `Deny` policies
 2. Use `azurePropertyPath` (fall back to `bicepPropertyPath` if absent).
    Drop leading resource-type segment → map to Bicep ARM property path
 3. Build compliance map: resource type → Bicep property → required value
 4. Merge governance tags with 4 baseline defaults (governance wins)
-5. Validate every planned resource can comply; STOP if any Deny unsatisfiable
+5. Validate every planned resource can comply
+6. If any Deny policy is unsatisfiable, **MANDATORY — use the `askQuestions` tool**
+   to present the unresolved policies. Build one question with:
+   - header: "Unresolved Governance Policy Violations"
+   - question: List each unsatisfiable Deny policy name and affected resource
+   - Options: **Return to Planner** (recommended) / **Override and proceed** (advanced)
+   **NEVER** list governance violations in chat text and ask the user to reply.
+   If the user chooses to return, STOP and present the Return to Step 4 handoff.
+
+> **CRITICAL GATE** — Never proceed to code generation with unresolved Deny
+> policy violations. Never collect user decisions via chat messages — always
+> use the `askQuestions` tool.
 
 **Policy Effect Reference**: `azure-defaults/references/policy-effect-decision-tree.md`
+
+### Phase 1.6: Context Compaction (MANDATORY)
+
+Context usage reaches ~80% after preflight checks and governance mapping.
+**You MUST compact the conversation before proceeding to code generation.**
+
+1. **Summarize prior phases** — write a single concise message containing:
+   - Preflight check result (blockers, AVM vs custom count)
+   - Governance compliance map (Deny policies mapped, unsatisfied count)
+   - Deployment strategy from `04-implementation-plan.md` (phased/single)
+   - Resource list with module paths and key parameters
+2. **Switch to minimal skill loading** — for any further skill reads, use
+   `SKILL.minimal.md` variants (see `context-shredding` skill, >80% tier)
+3. **Do NOT re-read predecessor artifacts** — rely on the summary above
+   and the saved `04-preflight-check.md` + `04-governance-constraints.json` on disk
+4. **Update session state** — write `sub_step: "phase_1.6_compacted"` to
+   `00-session-state.json` so resume skips re-loading prior context
 
 ### Phase 2: Progressive Implementation
 
@@ -192,17 +232,29 @@ Generate `infra/bicep/{project}/deploy.ps1` with:
 - Phase-aware looping if phased; approval prompts between phases
 - Output parsing and error handling
 
-### Phase 4: Validation (Subagent-Driven)
+### Phase 4: Validation (Subagent-Driven — Parallel)
 
-1. Delegate to `bicep-lint-subagent` (path: `infra/bicep/{project}/main.bicep`) — expect PASS
-2. Delegate to `bicep-review-subagent` (path: `infra/bicep/{project}/`) — expect APPROVED
-3. Both must pass before Phase 4.5
+Invoke both validation subagents **in parallel** via simultaneous `#runSubagent` calls
+(independent checkers — syntax vs standards — on the same code):
+
+1. `bicep-lint-subagent` (path: `infra/bicep/{project}/main.bicep`) — expect PASS
+2. `bicep-review-subagent` (path: `infra/bicep/{project}/`) — expect APPROVED
+
+Await both results. Both must pass before Phase 4.5.
 
 ### Phase 4.5: Adversarial Code Review (3 passes)
 
 Read `azure-defaults/references/adversarial-review-protocol.md` for lens table and invocation template.
+Check `00-session-state.json` `decisions.complexity` to determine pass count per the review matrix in `adversarial-review-protocol.md`.
 
-Invoke `challenger-review-subagent` 3× with `artifact_type = "iac-code"`, rotating `review_focus` per protocol.
+Invoke challenger subagents with `artifact_type = "iac-code"`,
+rotating `review_focus` per protocol.
+**Model routing**: Pass 1 (security-governance) →
+`challenger-review-subagent` (GPT-5.4).
+Passes 2-3 → `challenger-review-codex-subagent` (GPT-5.3-Codex).
+Follow the conditional pass rules from `adversarial-review-protocol.md` —
+skip pass 2 if pass 1 has 0 `must_fix` and <2 `should_fix`;
+skip pass 3 if pass 2 has 0 `must_fix`.
 Write results to `challenge-findings-iac-code-pass{N}.json`. Fix any `must_fix` items, re-validate, re-run failing pass.
 
 Save validation status in `05-implementation-reference.md`. Run `npm run lint:artifact-templates`.
@@ -236,7 +288,7 @@ infra/bicep/{project}/
 - [ ] Security baseline applied (TLS 1.2, HTTPS, managed identity)
 - [ ] Length constraints respected (KV≤24, Storage≤24)
 - [ ] `bicep-lint-subagent` PASS + `bicep-review-subagent` APPROVED
-- [ ] 3-pass adversarial review completed (pass 3 conditional on pass 2 must_fix)
+- [ ] Adversarial review completed (pass 2 conditional on pass 1 severity; pass 3 conditional on pass 2 must_fix)
 - [ ] `deploy.ps1` generated; `05-implementation-reference.md` saved
 - [ ] Budget module with forecast alerts (80/100/120%) and anomaly detection
 - [ ] Zero hardcoded project-specific values (see `iac-cost-repeatability.instructions.md`)
