@@ -11,7 +11,6 @@ tools:
     read,
     search,
     web,
-    vscode/askQuestions,
     "azure-mcp/*",
     "bicep/*",
     ms-azuretools.vscode-azureresourcegroups/azureActivityLog,
@@ -50,7 +49,6 @@ Always return results in this exact format:
 
 ```text
 WHAT-IF ANALYSIS RESULT
-───────────────────────
 Status: [PASS|FAIL|WARNING]
 Template: {path/to/main.bicep}
 Resource Group: {rg-name}

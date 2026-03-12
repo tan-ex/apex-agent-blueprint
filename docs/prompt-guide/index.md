@@ -54,7 +54,7 @@ infrastructure.
 
 | Agent                  | Persona       | Step | Purpose                                        |
 | ---------------------- | ------------- | ---- | ---------------------------------------------- |
-| **InfraOps Conductor** | 🎼 Maestro    | All  | Orchestrates the full 7-step workflow          |
+| **InfraOps Conductor** | 🎼 Maestro    | All  | Orchestrates the full 8-step workflow          |
 | **Requirements**       | 📜 Scribe     | 1    | Captures business and technical requirements   |
 | **Architect**          | 🏛️ Oracle     | 2    | WAF assessment, cost estimates, SKU comparison |
 | **Design**             | 🎨 Artisan    | 3    | Architecture diagrams and ADRs (optional step) |
@@ -70,22 +70,19 @@ infrastructure.
 
 ### Skills
 
-| Skill                      | Purpose                                              |
-| -------------------------- | ---------------------------------------------------- |
-| `azure-defaults`           | Regions, tags, naming, AVM, security, governance     |
-| `azure-artifacts`          | H2 template structures for agent output files        |
-| `azure-diagrams`           | Python architecture diagram generation               |
-| `azure-adr`                | Architecture Decision Records                        |
-| `azure-bicep-patterns`     | Reusable Bicep patterns (hub-spoke, PE, diagnostics) |
-| `terraform-patterns`       | Reusable Terraform patterns (hub-spoke, PE, AVM-TF)  |
-| `azure-troubleshooting`    | KQL templates, health checks, remediation playbooks  |
-| `git-commit`               | Conventional commit message conventions              |
-| `github-operations`        | GitHub issues, PRs, CLI, Actions, releases           |
-| `docs-writer`              | Documentation generation and maintenance             |
-| `make-skill-template`      | Scaffold new skills from a template                  |
-| `microsoft-docs`           | Query official Microsoft/Azure documentation         |
-| `microsoft-code-reference` | Verify SDK methods and find code samples             |
-| `microsoft-skill-creator`  | Create hybrid skills for Microsoft technologies      |
+| Skill                   | Purpose                                              |
+| ----------------------- | ---------------------------------------------------- |
+| `azure-defaults`        | Regions, tags, naming, AVM, security, governance     |
+| `azure-artifacts`       | H2 template structures for agent output files        |
+| `azure-diagrams`        | Python architecture diagram generation               |
+| `azure-adr`             | Architecture Decision Records                        |
+| `azure-bicep-patterns`  | Reusable Bicep patterns (hub-spoke, PE, diagnostics) |
+| `terraform-patterns`    | Reusable Terraform patterns (hub-spoke, PE, AVM-TF)  |
+| `azure-troubleshooting` | KQL templates, health checks, remediation playbooks  |
+| `git-commit`            | Conventional commit message conventions              |
+| `github-operations`     | GitHub issues, PRs, CLI, Actions, releases           |
+| `docs-writer`           | Documentation generation and maintenance             |
+| `make-skill-template`   | Scaffold new skills from a template                  |
 
 ### Subagents
 
@@ -116,7 +113,7 @@ to see available prompts.
 
 | Prompt File           | Agent              | Step | Purpose                                     |
 | --------------------- | ------------------ | ---- | ------------------------------------------- |
-| `run-conductor`       | InfraOps Conductor | All  | End-to-end 7-step orchestration             |
+| `run-conductor`       | InfraOps Conductor | All  | End-to-end 8-step orchestration             |
 | `plan-requirements`   | Requirements       | 1    | Business-first requirements discovery       |
 | `assess-architecture` | Architect          | 2    | WAF assessment with cost estimates          |
 | `design-diagram`      | Design             | 3    | Python architecture diagram generation      |

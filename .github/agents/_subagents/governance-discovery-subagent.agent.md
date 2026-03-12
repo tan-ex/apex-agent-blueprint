@@ -11,7 +11,6 @@ tools:
     read,
     search,
     web,
-    vscode/askQuestions,
     "azure-mcp/*",
     ms-azuretools.vscode-azureresourcegroups/azureActivityLog,
   ]
@@ -31,7 +30,7 @@ and return structured findings
 
 **Before doing ANY work**, read:
 
-1. **Read** `.github/skills/azure-defaults/SKILL.md` — Governance Discovery section for query patterns
+1. **Read** `.github/skills/azure-defaults/SKILL.digest.md` — Governance Discovery section for query patterns
 
 ## Core Workflow
 
@@ -135,7 +134,6 @@ Always return results in this exact format:
 
 ```text
 GOVERNANCE DISCOVERY RESULT
-───────────────────────────
 Status: [COMPLETE|PARTIAL|FAILED]
 Subscription: {subscription-name} ({subscription-id})
 Total Assignments: {count}

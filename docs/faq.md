@@ -80,7 +80,7 @@ Frequently asked questions about Agentic InfraOps.
     No. Agentic InfraOps requires:
 
     - **GitHub Copilot** — cloud-hosted AI service
-    - **MCP servers** — Azure Pricing, Microsoft Learn, GitHub, and Terraform MCP servers
+    - **MCP servers** — Azure Pricing, GitHub, and Terraform MCP servers
       provide real-time data to agents
 
     The dev container itself runs locally, but agent conversations and MCP tool calls
@@ -109,7 +109,7 @@ Frequently asked questions about Agentic InfraOps.
     | **Output**      | Multiple artifacts                       | Specific outputs         |
     | **When to use** | Core workflow steps                      | Specialized capabilities |
 
-    Agents are the actors in the 7-step workflow. Skills are reusable knowledge modules
+    Agents are the actors in the 8-step workflow. Skills are reusable knowledge modules
     that agents load on demand. See the [Workflow](workflow.md) page for details.
 
 ??? question "How do I resume a failed or interrupted workflow?"

@@ -15,6 +15,7 @@ agents:
     "05t-Terraform Planner",
     "06t-Terraform CodeGen",
     "07t-Terraform Deploy",
+    "challenger-review-subagent",
   ]
 tools:
   [
@@ -52,18 +53,17 @@ handoffs:
 
 Streamlined orchestrator for **simple** Azure infrastructure projects.
 
-> [!CAUTION]
-> **COMPLEXITY GATE**: This conductor is ONLY for `simple` projects
-> (≤3 resources, no custom policies, single environment).
-> If the project is `standard` or `complex`, hand off to the main
-> `01-Conductor` immediately.
+**COMPLEXITY GATE**: This conductor is ONLY for `simple` projects
+(≤3 resources, no custom policies, single environment).
+If the project is `standard` or `complex`, hand off to the main
+`01-Conductor` immediately.
 
 ## MANDATORY: Read Skills First
 
-1. **Read** `.github/skills/golden-principles/SKILL.md`
-2. **Read** `.github/skills/session-resume/SKILL.md`
-3. **Read** `.github/skills/azure-defaults/SKILL.md`
-4. **Read** `.github/skills/azure-artifacts/SKILL.md`
+1. **Read** `.github/skills/golden-principles/SKILL.digest.md`
+2. **Read** `.github/skills/session-resume/SKILL.digest.md`
+3. **Read** `.github/skills/azure-defaults/SKILL.digest.md`
+4. **Read** `.github/skills/azure-artifacts/SKILL.digest.md`
 
 ## Fast-Path Workflow (5 Steps)
 
@@ -71,15 +71,27 @@ The fast path combines and streamlines the standard 7-step workflow:
 
 ### Step 1: Requirements (same as standard)
 
-Delegate to `02-Requirements` agent. The output MUST include
+**Present the Step 1 handoff** to the `02-Requirements` agent — do NOT
+use `#runSubagent`. The Requirements agent needs `askQuestions` to
+interview the user interactively (Phases 1-4). Subagents cannot present
+interactive question panels.
+
+The output MUST include
 `## 📊 Complexity Classification` with `complexity: simple`.
+The Requirements agent writes `decisions.complexity = "simple"` to
+`00-session-state.json`.
 
 **GATE**: If complexity is NOT `simple`, STOP and hand off to
 main `01-Conductor`.
 
+**Post-gate validation**: After Requirements completes, verify
+`decisions.complexity == "simple"` in `00-session-state.json`.
+If missing or not `simple`, STOP with error before proceeding.
+
 ### Step 2: Architecture (streamlined)
 
-Delegate to `03-Architect` agent. For simple projects:
+Delegate to `03-Architect` agent. For simple projects per the review
+matrix in `azure-defaults/references/adversarial-review-protocol.md`:
 
 - 1-pass comprehensive review (not 3-pass rotating)
 - Skip detailed cost comparison (single-tier is sufficient)
@@ -87,13 +99,17 @@ Delegate to `03-Architect` agent. For simple projects:
 
 ### Step 3: Plan + Code (combined)
 
-This is the key optimization — Plan and Code are combined:
+This is the key optimization — Plan and Code are combined.
+Review pass counts follow the `simple` row of the review matrix in
+`azure-defaults/references/adversarial-review-protocol.md`.
 
-1. Delegate to the IaC Planner (05b or 05t based on `iac_tool`)
+1. **Present the IaC Planner handoff** (05b or 05t based on `iac_tool`)
+   — the Planner uses `askQuestions` for the Deployment Strategy Gate,
+   so it must run as a direct handoff, not via `#runSubagent`.
    - **Skip governance discovery** (simple projects have no custom policies)
    - **Skip adversarial review** of the plan (1-pass at code stage)
    - Single deployment phase (no phased deployment needed)
-2. Immediately delegate to the IaC CodeGen agent (06b or 06t)
+2. Immediately delegate to the IaC CodeGen agent (06b or 06t) via `#runSubagent`
    - 1-pass comprehensive adversarial review (not 3-pass)
    - Standard validation (lint + review subagents)
 
@@ -101,6 +117,8 @@ This is the key optimization — Plan and Code are combined:
 
 Delegate to Deploy agent (07b or 07t). What-if/plan is still mandatory.
 User approval is still required.
+Per the review matrix, deploy adversarial review is **skipped** for
+simple projects with no open findings.
 
 ### Step 5: Documentation (streamlined)
 

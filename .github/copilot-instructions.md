@@ -7,46 +7,48 @@
 
 1. Enable subagents: `"github.copilot.chat": { "customAgentInSubagent": { "enabled": true } }`
 2. Open Chat (`Ctrl+Shift+I`) → Select **InfraOps Conductor** → Describe your project
-3. The Conductor guides you through all 7 steps with approval gates
+3. The Conductor guides you through all 8 steps with approval gates
 
-## 7-Step Workflow
+## 8-Step Workflow
 
-| Step | Agent                                                                      | Output                                                                                                    | Review | Gate       |
-| ---- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------ | ---------- |
-| 1    | Requirements                                                               | `01-requirements.md`                                                                                      | 1x     | Approval   |
-| 2    | Architect                                                                  | `02-architecture-assessment.md` + cost estimate                                                           | 3x+1x  | Approval   |
-| 3    | Design (opt)                                                               | `03-des-*.{py,png,md}`                                                                                    | —      | —          |
-| 4    | IaC Plan (Bicep: `05b-Bicep Planner` / Terraform: `05t-Terraform Planner`) | `04-implementation-plan.md` + governance + `04-dependency-diagram.py/.png` + `04-runtime-diagram.py/.png` | 1x+3x  | Approval   |
-| 5    | IaC Code (Bicep: `06b-Bicep CodeGen` / Terraform: `06t-Terraform CodeGen`) | `infra/bicep/{project}/` or `infra/terraform/{project}/`                                                  | 3x     | Validation |
-| 6    | Deploy (Bicep: `07b-Bicep Deploy` / Terraform: `07t-Terraform Deploy`)     | `06-deployment-summary.md`                                                                                | 1x     | Approval   |
-| 7    | As-Built                                                                   | `07-*.md` documentation suite                                                                             | —      | —          |
+| Step | Agent                                                                      | Output                                                                                       | Review   | Gate       |
+| ---- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------- | ---------- |
+| 1    | Requirements                                                               | `01-requirements.md`                                                                         | 1×       | Approval   |
+| 2    | Architect                                                                  | `02-architecture-assessment.md` + cost estimate                                              | 1×–3×+1× | Approval   |
+| 3    | Design (opt)                                                               | `03-des-*.{py,png,md}`                                                                       | —        | —          |
+| 3.5  | Governance (`04g-Governance`)                                              | `04-governance-constraints.md/.json`                                                         | —        | Approval   |
+| 4    | IaC Plan (Bicep: `05b-Bicep Planner` / Terraform: `05t-Terraform Planner`) | `04-implementation-plan.md` + `04-dependency-diagram.py/.png` + `04-runtime-diagram.py/.png` | 1×–2×    | Approval   |
+| 5    | IaC Code (Bicep: `06b-Bicep CodeGen` / Terraform: `06t-Terraform CodeGen`) | `infra/bicep/{project}/` or `infra/terraform/{project}/`                                     | 1×–3×    | Validation |
+| 6    | Deploy (Bicep: `07b-Bicep Deploy` / Terraform: `07t-Terraform Deploy`)     | `06-deployment-summary.md`                                                                   | —        | Approval   |
+| 7    | As-Built                                                                   | `07-*.md` documentation suite                                                                | —        | —          |
 
 All outputs → `agent-output/{project}/`. Context flows via artifact files + handoffs.
-Review column = adversarial passes by `challenger-review-subagent` (3x = rotating lenses; 1x = comprehensive).
+Review column = adversarial passes by challenger subagents, complexity-dependent
+(simple: 4, standard: 5–7, complex: 8).
+Reviews target AI-generated creative decisions only (Steps 1, 2, 4, 5).
 
 ## Skills (Auto-Invoked by Agents)
 
-| Skill                      | Purpose                                                               |
-| -------------------------- | --------------------------------------------------------------------- |
-| `azure-defaults`           | Regions, tags, naming, AVM, security, governance, pricing             |
-| `azure-artifacts`          | Template H2 structures, styling, generation rules                     |
-| `azure-bicep-patterns`     | Reusable Bicep patterns (hub-spoke, PE, diagnostics)                  |
-| `azure-troubleshooting`    | KQL templates, health checks, remediation playbooks                   |
-| `azure-diagrams`           | Python architecture diagram generation                                |
-| `azure-adr`                | Architecture Decision Records                                         |
-| `github-operations`        | GitHub issues, PRs, CLI, Actions, releases                            |
-| `git-commit`               | Commit message conventions                                            |
-| `docs-writer`              | Documentation generation                                              |
-| `make-skill-template`      | Scaffold new Agent Skills from templates                              |
-| `microsoft-docs`           | Query official Microsoft/Azure docs (requires Learn MCP)              |
-| `microsoft-code-reference` | Verify SDK methods and find working code samples (requires Learn MCP) |
-| `microsoft-skill-creator`  | Create hybrid skills for Microsoft technologies (requires Learn MCP)  |
-| `terraform-patterns`       | Terraform HCL patterns (hub-spoke, PE, diagnostics, AVM pitfalls)     |
-| `session-resume`           | Session state tracking, resume protocol, context budgets              |
-| `workflow-engine`          | DAG workflow graph, complexity routing, step definitions              |
-| `context-shredding`        | Runtime context compression tiers for large artifacts                 |
+| Skill                   | Purpose                                                           |
+| ----------------------- | ----------------------------------------------------------------- |
+| `azure-defaults`        | Regions, tags, naming, AVM, security, governance, pricing         |
+| `azure-artifacts`       | Template H2 structures, styling, generation rules                 |
+| `azure-bicep-patterns`  | Reusable Bicep patterns (hub-spoke, PE, diagnostics)              |
+| `azure-troubleshooting` | KQL templates, health checks, remediation playbooks               |
+| `azure-diagrams`        | Python architecture diagram generation                            |
+| `azure-adr`             | Architecture Decision Records                                     |
+| `github-operations`     | GitHub issues, PRs, CLI, Actions, releases                        |
+| `git-commit`            | Commit message conventions                                        |
+| `docs-writer`           | Documentation generation                                          |
+| `make-skill-template`   | Scaffold new Agent Skills from templates                          |
+| `terraform-patterns`    | Terraform HCL patterns (hub-spoke, PE, diagnostics, AVM pitfalls) |
+| `session-resume`        | Session state tracking, resume protocol, context budgets          |
+| `workflow-engine`       | DAG workflow graph, complexity routing, step definitions          |
+| `context-shredding`     | Runtime context compression tiers for large artifacts             |
 
-Agents read skills via: **"Read `.github/skills/{name}/SKILL.md`"** in their body.
+Agents read skills via: **"Read `.github/skills/{name}/SKILL.digest.md`"** in their body.
+At >60% context, agents load `SKILL.digest.md` (compact); at >80% they load
+`SKILL.minimal.md`. See the `context-shredding` skill for tier selection.
 
 ## Chat Triggers
 
