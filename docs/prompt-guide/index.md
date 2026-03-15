@@ -34,7 +34,7 @@ infrastructure.
 
   ***
 
-  Ready-to-use prompts for all 7 workflow steps plus standalone agents.
+  Ready-to-use prompts for all 8 workflow steps plus standalone agents.
 
   [:octicons-arrow-right-24: Workflow prompts](workflow-prompts.md)
 
@@ -52,7 +52,7 @@ infrastructure.
 
 ### Agents
 
-| Agent                  | Persona       | Step | Purpose                                        |
+| Agent                  | Codename      | Step | Purpose                                        |
 | ---------------------- | ------------- | ---- | ---------------------------------------------- |
 | **InfraOps Conductor** | 🎼 Maestro    | All  | Orchestrates the full 8-step workflow          |
 | **Requirements**       | 📜 Scribe     | 1    | Captures business and technical requirements   |
@@ -103,33 +103,31 @@ Reusable `.prompt.md` files in `.github/prompts/` provide one-click access
 to pre-configured agent workflows. In VS Code, type `/` in Copilot Chat
 to see available prompts.
 
-!!! warning "Planned prompt files"
-
-    The prompt files listed below are planned additions. Currently, only
-    `doc-gardening`, `git-commit-push`, and `plan-docsPeerReview` exist
-    in `.github/prompts/`. The remaining prompts will be added in a future release.
-
 #### Core Workflow Prompts
 
-| Prompt File           | Agent              | Step | Purpose                                     |
-| --------------------- | ------------------ | ---- | ------------------------------------------- |
-| `run-conductor`       | InfraOps Conductor | All  | End-to-end 8-step orchestration             |
-| `plan-requirements`   | Requirements       | 1    | Business-first requirements discovery       |
-| `assess-architecture` | Architect          | 2    | WAF assessment with cost estimates          |
-| `design-diagram`      | Design             | 3    | Python architecture diagram generation      |
-| `design-adr`          | Design             | 3    | Architecture Decision Record creation       |
-| `plan-bicep`          | Bicep Planner      | 4b   | Governance discovery and Bicep planning     |
-| `plan-terraform`      | Terraform Planner  | 4t   | Governance discovery and Terraform planning |
-| `generate-bicep`      | Bicep CodeGen      | 5b   | AVM-first Bicep template generation         |
-| `generate-terraform`  | Terraform CodeGen  | 5t   | AVM-TF Terraform config generation          |
-| `deploy`              | Bicep Deploy       | 6b   | What-if analysis and Bicep deployment       |
-| `deploy-terraform`    | Terraform Deploy   | 6t   | Terraform plan preview and apply            |
-| `generate-docs`       | As-Built           | 7    | As-built documentation suite                |
-| `diagnose-resources`  | Diagnose           | —    | Resource health diagnostics                 |
+| Prompt File             | Agent              | Step | Purpose                                     |
+| ----------------------- | ------------------ | ---- | ------------------------------------------- |
+| `01-conductor`          | InfraOps Conductor | All  | End-to-end 8-step orchestration             |
+| `02-requirements`       | Requirements       | 1    | Business-first requirements discovery       |
+| `03-architect`          | Architect          | 2    | WAF assessment with cost estimates          |
+| `04-design`             | Design             | 3    | Python architecture diagrams and ADRs       |
+| `04g-governance`        | Governance         | 3.5  | Azure Policy governance discovery           |
+| `05b-bicep-planner`     | Bicep Planner      | 4b   | Governance discovery and Bicep planning     |
+| `05t-terraform-planner` | Terraform Planner  | 4t   | Governance discovery and Terraform planning |
+| `06b-bicep-codegen`     | Bicep CodeGen      | 5b   | AVM-first Bicep template generation         |
+| `06t-terraform-codegen` | Terraform CodeGen  | 5t   | AVM-TF Terraform config generation          |
+| `07b-bicep-deploy`      | Bicep Deploy       | 6b   | What-if analysis and Bicep deployment       |
+| `07t-terraform-deploy`  | Terraform Deploy   | 6t   | Terraform plan preview and apply            |
+| `08-as-built`           | As-Built           | 7    | As-built documentation suite                |
+| `diagnose-resource`     | Diagnose           | —    | Resource health diagnostics                 |
 
-#### Demo Prompts
+#### Utility Prompts
 
-| Prompt File                 | Agent              | Purpose                                      |
-| --------------------------- | ------------------ | -------------------------------------------- |
-| `conductor-demo`            | InfraOps Conductor | Full workflow demo (Static Web App scenario) |
-| `plan-req-demo-interactive` | Requirements       | Interactive EU ecommerce migration demo      |
+| Prompt File           | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `git-commit-push`     | Diff-aware conventional commit and push      |
+| `doc-gardening`       | Documentation maintenance and freshness      |
+| `plan-docsPeerReview` | Multi-pass documentation peer review         |
+| `challenger-review`   | Standalone adversarial review of an artifact |
+| `context-audit`       | Agent context window utilization audit       |
+| `resume-workflow`     | Resume an interrupted workflow session       |

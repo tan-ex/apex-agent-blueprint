@@ -1,18 +1,26 @@
 ---
 name: microsoft-code-reference
-description: Look up Microsoft API references, find working code samples, and verify SDK code is correct. Use when working with Azure SDKs, .NET libraries, or Microsoft APIs—to find the right method, check parameters, get working examples, or troubleshoot errors. Catches hallucinated methods, wrong signatures, and deprecated patterns by querying official docs.
-compatibility: Requires Microsoft Learn MCP Server (https://learn.microsoft.com/api/mcp)
+description: "Look up Microsoft API references, find working code samples, and verify SDK code is correct. USE FOR: Azure SDK method verification, .NET/Python package lookups, code sample discovery, error troubleshooting, catching hallucinated methods and deprecated patterns. DO NOT USE FOR: conceptual documentation (use microsoft-docs), skill creation (use microsoft-skill-creator), Bicep/Terraform module lookups (use azure-bicep-patterns or terraform-patterns)."
+compatibility: Works with Microsoft Learn MCP Server (https://learn.microsoft.com/api/mcp). Can also use the mslearn CLI as a fallback.
+license: MIT
+metadata:
+  author: microsoftdocs
+  version: "1.0"
+  category: code-verification
 ---
 
 # Microsoft Code Reference
 
+Verify SDK code against official Microsoft documentation. Catches hallucinated
+methods, wrong signatures, and deprecated patterns by querying live docs.
+
 ## Tools
 
-| Need                    | Tool                         | Example                                                                          |
-| ----------------------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| API method/class lookup | `microsoft_docs_search`      | `"BlobClient UploadAsync Azure.Storage.Blobs"`                                   |
-| Working code sample     | `microsoft_code_sample_search` | `query: "upload blob managed identity", language: "python"`                    |
-| Full API reference      | `microsoft_docs_fetch`       | Fetch URL from `microsoft_docs_search` (for overloads, full signatures)          |
+| Need                    | Tool                           | Example                                                                 |
+| ----------------------- | ------------------------------ | ----------------------------------------------------------------------- |
+| API method/class lookup | `microsoft_docs_search`        | `"BlobClient UploadAsync Azure.Storage.Blobs"`                          |
+| Working code sample     | `microsoft_code_sample_search` | `query: "upload blob managed identity", language: "python"`             |
+| Full API reference      | `microsoft_docs_fetch`         | Fetch URL from `microsoft_docs_search` (for overloads, full signatures) |
 
 ## Finding Code Samples
 
@@ -24,11 +32,11 @@ microsoft_code_sample_search(query: "authenticate with managed identity", langua
 microsoft_code_sample_search(query: "send message service bus", language: "javascript")
 ```
 
-When to use:
+**When to use:**
 
-- Before writing code—find a working pattern to follow
-- After errors—compare your code against a known-good sample
-- Unsure of initialization/setup—samples show complete context
+- Before writing code — find a working pattern to follow
+- After errors — compare your code against a known-good sample
+- Unsure of initialization/setup — samples show complete context
 
 ## API Lookups
 
@@ -49,17 +57,18 @@ Fetch full page when method has multiple overloads or you need complete paramete
 
 ## Error Troubleshooting
 
-Use `microsoft_code_sample_search` to find working code samples and compare with your
-implementation. For specific errors, use `microsoft_docs_search` and `microsoft_docs_fetch`:
+Use `microsoft_code_sample_search` to find working code samples and compare
+with your implementation. For specific errors, use `microsoft_docs_search`
+and `microsoft_docs_fetch`:
 
-| Error Type          | Query                                                      |
-| ------------------- | ---------------------------------------------------------- |
-| Method not found    | `"[ClassName] methods [Namespace]"`                        |
-| Type not found      | `"[TypeName] NuGet package namespace"`                     |
-| Wrong signature     | `"[ClassName] [MethodName] overloads"` → fetch full page   |
-| Deprecated warning  | `"[OldType] migration v12"`                                |
-| Auth failure        | `"DefaultAzureCredential troubleshooting"`                 |
-| 403 Forbidden       | `"[ServiceName] RBAC permissions"`                         |
+| Error Type         | Query                                          |
+| ------------------ | ---------------------------------------------- |
+| Method not found   | `"[ClassName] methods [Namespace]"`            |
+| Type not found     | `"[TypeName] NuGet package namespace"`         |
+| Wrong signature    | `"[ClassName] [MethodName] overloads"` → fetch |
+| Deprecated warning | `"[OldType] migration v12"`                    |
+| Auth failure       | `"DefaultAzureCredential troubleshooting"`     |
+| 403 Forbidden      | `"[ServiceName] RBAC permissions"`             |
 
 ## When to Verify
 
@@ -79,3 +88,24 @@ Before generating code using Microsoft SDKs, verify it's correct:
 3. **Find working sample** — `microsoft_code_sample_search(query: "[task]", language: "[lang]")`
 
 For simple lookups, step 1 alone may suffice. For complex API usage, complete all three steps.
+
+## CLI Alternative
+
+If the Learn MCP server is not available, use the `mslearn` CLI via Bash instead:
+
+```bash
+# Run directly (no install needed)
+npx @microsoft/learn-cli search "BlobClient UploadAsync Azure.Storage.Blobs"
+
+# Or install globally, then run
+npm install -g @microsoft/learn-cli
+mslearn search "BlobClient UploadAsync Azure.Storage.Blobs"
+```
+
+| MCP Tool                                                      | CLI Command                                |
+| ------------------------------------------------------------- | ------------------------------------------ |
+| `microsoft_docs_search(query: "...")`                         | `mslearn search "..."`                     |
+| `microsoft_code_sample_search(query: "...", language: "...")` | `mslearn code-search "..." --language ...` |
+| `microsoft_docs_fetch(url: "...")`                            | `mslearn fetch "..."`                      |
+
+Pass `--json` to `search` or `code-search` to get raw JSON output for further processing.

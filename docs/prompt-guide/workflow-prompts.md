@@ -4,7 +4,7 @@ toc_depth: 2
 
 # :material-format-list-numbered: Workflow Prompts
 
-The Agentic InfraOps workflow follows seven steps. Use the **InfraOps Conductor** to
+The Agentic InfraOps workflow follows eight steps (including Step 3.5 Governance). Use the **InfraOps Conductor** to
 run all steps end-to-end, or invoke individual agents directly.
 
 ## :material-play-circle: End-to-End (Conductor)

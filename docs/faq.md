@@ -2,6 +2,8 @@
 
 Frequently asked questions about Agentic InfraOps.
 
+**Jump to:** [General](#general) · [IaC Tracks](#iac-tracks) · [Usage](#usage) · [Troubleshooting](#troubleshooting)
+
 ---
 
 ## General
@@ -28,8 +30,11 @@ Frequently asked questions about Agentic InfraOps.
 ??? question "What AI models does this require?"
 
     The project is built for **GitHub Copilot** in VS Code. Agents specify their
-    preferred model in their frontmatter — most use Claude Opus 4.6 or GPT-5.3-Codex.
-    The Conductor and review-heavy agents perform best with Claude Opus 4.6.
+    preferred model in their frontmatter — most use the latest Claude Opus or
+    GPT Codex models. The Conductor and review-heavy agents perform best with
+    the latest Claude Opus model.
+
+    Model versions evolve — check agent frontmatter for current selections.
 
     You need an active **GitHub Copilot** license (Individual, Business, or Enterprise).
 
@@ -80,7 +85,7 @@ Frequently asked questions about Agentic InfraOps.
     No. Agentic InfraOps requires:
 
     - **GitHub Copilot** — cloud-hosted AI service
-    - **MCP servers** — Azure Pricing, GitHub, and Terraform MCP servers
+    - **MCP servers** — Azure Pricing, GitHub, Terraform, and Microsoft Learn MCP servers
       provide real-time data to agents
 
     The dev container itself runs locally, but agent conversations and MCP tool calls
@@ -128,7 +133,7 @@ Frequently asked questions about Agentic InfraOps.
     Yes — the [MicroHack](https://jonathan-vella.github.io/microhack-agentic-infraops/) is a
     hands-on, guided challenge where you build Azure infrastructure end-to-end using AI agents,
     from requirements to deployment. It includes structured exercises, guided prompts, and
-    reference solutions for each of the 7 workflow steps.
+    reference solutions for each of the 8 workflow steps.
 
 ---
 
@@ -167,7 +172,13 @@ Frequently asked questions about Agentic InfraOps.
     The workflow degrades gracefully. Steps 1-5 can proceed without MCP — agents skip
     real-time pricing lookups and use documented defaults. Only Step 2 cost estimation
     and Step 7 as-built cost updates depend directly on the Pricing MCP server.
-    Governance discovery (Step 4) uses Azure CLI, not MCP.
+    Governance discovery (Step 3.5) uses Azure REST API, not MCP.
+
+!!! warning "Step 6 (Deploy) requires Azure credentials"
+
+    If you attempt deployment without an active Azure subscription and `az login`,
+    the deploy agent will fail with an authentication error.
+    See [Troubleshooting](troubleshooting.md) for recovery steps.
 
 ---
 

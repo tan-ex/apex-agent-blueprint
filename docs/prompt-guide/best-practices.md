@@ -123,13 +123,13 @@ Prompt 4: Make the address space configurable via parameters
 
     Avoid these patterns — they lead to incomplete, generic, or incorrect AI output.
 
-| Anti-Pattern             | Problem                 | Better Approach                       |
-| ------------------------ | ----------------------- | ------------------------------------- |
-| "Generate everything"    | Output too broad        | Break into small requests             |
-| Accepting without review | Bugs, security issues   | Always validate and test              |
-| Ignoring context         | Generic suggestions     | Open relevant files, use `@workspace` |
-| One-shot complex prompts | Incomplete output       | Iterate with follow-ups               |
-| Not providing examples   | Inconsistent formatting | Show the pattern you want             |
+| Anti-Pattern             | Problem                 | Better Approach                                                                 |
+| ------------------------ | ----------------------- | ------------------------------------------------------------------------------- |
+| "Generate everything"    | Output too broad        | Break into one module per prompt: VNet, then NSGs, then diagnostics             |
+| Accepting without review | Bugs, security issues   | Always run `bicep lint` / `terraform validate` and review for hardcoded secrets |
+| Ignoring context         | Generic suggestions     | Open relevant files first, use `@workspace` and `#file:` references             |
+| One-shot complex prompts | Incomplete output       | Iterate: start with skeleton, add security, add monitoring, add parameters      |
+| Not providing examples   | Inconsistent formatting | Show the naming pattern or module structure you want the agent to follow        |
 
 ## :material-check-decagram-outline: Always Validate AI Output
 

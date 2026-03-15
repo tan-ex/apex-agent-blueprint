@@ -35,18 +35,19 @@ Skills implement three levels of disclosure:
 
 ### Skill Catalog
 
-The system contains 18 skills across several domains:
+The system contains the following skills across several domains:
 
-| Domain               | Skills                                                              |
-| -------------------- | ------------------------------------------------------------------- |
-| Azure Infrastructure | `azure-defaults`, `azure-bicep-patterns`, `terraform-patterns`      |
-| Azure Operations     | `azure-troubleshooting`, `azure-diagrams`, `azure-adr`              |
-| Artefact Generation  | `azure-artifacts`, `context-shredding`                              |
-| Documentation        | `docs-writer`                                                       |
-| Workflow and State   | `session-resume`, `workflow-engine`, `golden-principles`            |
-| Deployment           | `iac-common`                                                        |
-| GitHub Operations    | `github-operations`, `git-commit`                                   |
-| Meta / Tooling       | `make-skill-template`, `context-optimizer`, `copilot-customization` |
+| Domain               | Skills                                                                  |
+| -------------------- | ----------------------------------------------------------------------- |
+| Azure Infrastructure | `azure-defaults`, `azure-bicep-patterns`, `terraform-patterns`          |
+| Azure Operations     | `azure-troubleshooting`, `azure-diagrams`, `azure-adr`                  |
+| Artefact Generation  | `azure-artifacts`, `context-shredding`                                  |
+| Documentation        | `docs-writer`                                                           |
+| Workflow and State   | `session-resume`, `workflow-engine`, `golden-principles`                |
+| Deployment           | `iac-common`                                                            |
+| GitHub Operations    | `github-operations`, `git-commit`                                       |
+| Microsoft Learn      | `microsoft-docs`, `microsoft-code-reference`, `microsoft-skill-creator` |
+| Meta / Tooling       | `make-skill-template`, `context-optimizer`, `copilot-customization`     |
 
 The `copilot-customization` skill is an authoritative reference for VS Code Copilot
 customisation mechanisms: instructions, prompt files, custom agents, agent skills,
@@ -111,3 +112,12 @@ rules across ALL projects (Bicep and Terraform):
 Following the Golden Principle "Mechanical Enforcement Over Documentation," every
 instruction has a corresponding validation script. The rule is: if it can be a linter
 check, it should be one. Documentation is for humans; machines enforce rules.
+
+---
+
+!!! tip "Further Reading"
+
+    - [Core Concepts](four-pillars.md) — the four knowledge layers and how they interact
+    - [Agent Architecture](agents.md) — how agents load and use skills via progressive disclosure
+    - [Workflow Engine & Quality](workflow-engine.md) — validators that enforce instruction rules
+    - [MCP Integration](mcp-integration.md) — external tool interfaces available to agents

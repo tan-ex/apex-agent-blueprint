@@ -1,17 +1,25 @@
 ---
 name: microsoft-docs
-description: Query official Microsoft documentation to understand concepts, find tutorials, and learn how services work. Use for Azure, .NET, Microsoft 365, Windows, Power Platform, and all Microsoft technologies. Get accurate, current information from learn.microsoft.com—architecture overviews, quickstarts, configuration guides, limits, and best practices.
-compatibility: Requires Microsoft Learn MCP Server (https://learn.microsoft.com/api/mcp)
+description: "Query official Microsoft documentation to understand concepts, find tutorials, and learn how services work. USE FOR: Azure service overviews, quickstarts, configuration guides, limits and quotas, best practices, architecture patterns, WAF pillar references. DO NOT USE FOR: code sample lookups (use microsoft-code-reference), skill creation (use microsoft-skill-creator), Azure pricing (use azure-pricing MCP)."
+compatibility: Works with Microsoft Learn MCP Server (https://learn.microsoft.com/api/mcp). Can also use the mslearn CLI as a fallback.
+license: MIT
+metadata:
+  author: microsoftdocs
+  version: "1.0"
+  category: documentation
 ---
 
 # Microsoft Docs
 
+Search and retrieve official Microsoft documentation from learn.microsoft.com.
+Covers Azure, .NET, Microsoft 365, Windows, Power Platform, and all Microsoft technologies.
+
 ## Tools
 
-| Tool                   | Use For                                                    |
-| ---------------------- | ---------------------------------------------------------- |
-| `microsoft_docs_search` | Find documentation—concepts, guides, tutorials, configuration |
-| `microsoft_docs_fetch`  | Get full page content (when search excerpts aren't enough) |
+| Tool                    | Use For                                                         |
+| ----------------------- | --------------------------------------------------------------- |
+| `microsoft_docs_search` | Find documentation — concepts, guides, tutorials, configuration |
+| `microsoft_docs_fetch`  | Get full page content (when search excerpts aren't enough)      |
 
 ## When to Use
 
@@ -27,10 +35,10 @@ compatibility: Requires Microsoft Learn MCP Server (https://learn.microsoft.com/
 Good queries are specific:
 
 ```text
-# ❌ Too broad
+# Too broad
 "Azure Functions"
 
-# ✅ Specific
+# Specific
 "Azure Functions Python v2 programming model"
 "Cosmos DB partition key design best practices"
 "Container Apps scaling rules KEDA"
@@ -56,3 +64,24 @@ Fetch after search when:
 - **Accuracy** — live docs, not training data that may be outdated
 - **Completeness** — tutorials have all steps, not fragments
 - **Authority** — official Microsoft documentation
+
+## CLI Alternative
+
+If the Learn MCP server is not available, use the `mslearn` CLI via Bash instead:
+
+```bash
+# Run directly (no install needed)
+npx @microsoft/learn-cli search "azure functions timeout"
+
+# Or install globally, then run
+npm install -g @microsoft/learn-cli
+mslearn search "azure functions timeout"
+```
+
+| MCP Tool                              | CLI Command            |
+| ------------------------------------- | ---------------------- |
+| `microsoft_docs_search(query: "...")` | `mslearn search "..."` |
+| `microsoft_docs_fetch(url: "...")`    | `mslearn fetch "..."`  |
+
+The `fetch` command also supports `--section <heading>` to extract a single section
+and `--max-chars <number>` to truncate output.

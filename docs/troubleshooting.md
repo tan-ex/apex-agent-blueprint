@@ -12,9 +12,9 @@ toc_depth: 2
 
 > Common issues and solutions for Agentic InfraOps
 
-## :material-account-card-outline: Agent Personas Quick Reference
+## :material-account-card-outline: Agent Codenames Quick Reference
 
-| Agent              | Persona       | Common Issues                    |
+| Agent              | Codename      | Common Issues                    |
 | ------------------ | ------------- | -------------------------------- |
 | InfraOps Conductor | 🎼 Maestro    | Subagent invocation not working  |
 | requirements       | 📜 Scribe     | Not appearing in list            |
@@ -128,6 +128,11 @@ Responses are instant, no terminal commands execute, no files are created.
 4. **Use Chat Diagnostics**:
    - Right-click in Chat view → "Diagnostics"
    - Check all agents are loaded correctly
+
+5. **If the session was interrupted** (no new output, truncated response):
+   - Check `agent-output/{project}/00-session-state.json` for the last completed step
+   - Restart the Conductor with: _"Resume the workflow from step X"_
+   - See [Workflow Engine](how-it-works/workflow-engine.md) for session state details
 
 **Note**: Workspace settings (`.vscode/settings.json`) may not be sufficient
 for experimental features. User settings take precedence.
@@ -429,7 +434,7 @@ handoffs:
 Ensure target agent exists:
 
 ```bash
-ls .github/agents/architect.agent.md
+ls .github/agents/03-architect.agent.md
 ```
 
 ## Diagnostic Commands
