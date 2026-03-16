@@ -154,6 +154,12 @@ The container reads it automatically — no `gh auth login` required inside the 
 5. Rebuild the devcontainer: **F1 → Dev Containers: Rebuild Container**
 <!-- markdownlint-enable MD029 -->
 
+!!! warning "Why not shell exports?"
+
+    Running `export GH_TOKEN=...` inside the container does not persist across
+    rebuilds. VS Code User Settings inject the token via `terminal.integrated.env.linux`,
+    which the devcontainer forwards automatically.
+
 The devcontainer forwards `GH_TOKEN` from VS Code's environment automatically
 (`"GH_TOKEN": "${localEnv:GH_TOKEN}"` in `devcontainer.json`).
 
@@ -175,11 +181,10 @@ az --version && bicep --version && pwsh --version
 
 ## Alternative Docker Options
 
-!!! tip "Alternative: Rancher Desktop"
+!!! tip "Choose your Docker runtime before installing"
 
-    If Docker Desktop licensing is a concern, [Rancher Desktop](https://rancherdesktop.io/)
-    is a free alternative that works with the VS Code Dev Containers extension.
-    Choose "dockerd (moby)" as the runtime.
+    If Docker Desktop licensing is a concern, consider one of these free alternatives.
+    Choose your runtime **before** opening the dev container for the first time.
 
 ### Rancher Desktop (Free Docker Desktop Alternative)
 

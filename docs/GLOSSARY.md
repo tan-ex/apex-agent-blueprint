@@ -259,10 +259,13 @@ troubleshooting and diagnostics (see S05 Troubleshooting scenario).
 
 ### MCP (Model Context Protocol)
 
-Protocol for extending AI assistants with external tools and data sources. The Azure Pricing MCP
-server provides real-time Azure pricing to Copilot.
+Protocol for extending AI assistants with external tools and data sources. This project
+uses five MCP servers: GitHub (repo operations), Azure (RBAC-aware resource access),
+Azure Pricing (cost estimation), Terraform Registry (module lookup), and Microsoft
+Learn (official documentation search and code sample discovery).
 
-📁 **See**: [mcp/azure-pricing-mcp/](https://github.com/jonathan-vella/azure-agentic-infraops/tree/main/mcp/azure-pricing-mcp)
+📁 **See**: [mcp/azure-pricing-mcp/](https://github.com/jonathan-vella/azure-agentic-infraops/tree/main/mcp/azure-pricing-mcp),
+[MCP Integration](how-it-works/mcp-integration.md)
 
 ### MJS (ECMAScript Module)
 
@@ -370,7 +373,7 @@ for Agentic InfraOps methodology.
 
 A reusable knowledge module stored in `.github/skills/` that agents can invoke. Unlike agents,
 skills don't have their own chat persona — they provide domain knowledge that agents use.
-18 skills are organized across conventions, document creation, infrastructure patterns,
+Skills are organized across conventions, document creation, infrastructure patterns,
 workflow automation, and troubleshooting categories.
 
 📁 **See**: [.github/skills/](https://github.com/jonathan-vella/azure-agentic-infraops/tree/main/.github/skills)
@@ -475,13 +478,14 @@ YAML is used in agent frontmatter (`.agent.md`), instruction frontmatter
 
 ## Numbers & Symbols
 
-### 7-Step Agentic Workflow
+### 8-Step Agentic Workflow
 
 The core Agentic InfraOps workflow: `requirements` → `architect` → Design Artifacts →
-IaC Plan → IaC Code → Deploy → Documentation. Steps 1-3 and 7 are shared;
-steps 4-6 diverge into **Bicep track** (`bicep-planner` → `bicep-codegen` → `bicep-deploy`)
-or **Terraform track** (`terraform-planner` → `terraform-codegen` → `terraform-deploy`).
-Each step produces artifacts in `agent-output/`.
+Governance → IaC Plan → IaC Code → Deploy → Documentation. Step 3.5 (Governance)
+runs between Design and IaC Plan. Steps 1–3 and 7 are shared; steps 4–6 diverge into
+**Bicep track** (`bicep-planner` → `bicep-codegen` → `bicep-deploy`) or **Terraform track**
+(`terraform-planner` → `terraform-codegen` → `terraform-deploy`). Each step produces
+artifacts in `agent-output/`.
 
 📁 **See**: [Workflow Guide](workflow.md)
 

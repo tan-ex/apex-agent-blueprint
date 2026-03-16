@@ -43,6 +43,8 @@ flowchart TD
     S2["step-2: Architecture"]
     G2{{"gate-2: Approval"}}:::gate
     S3["step-3: Design"]
+    S35["step-3.5: Governance"]
+    G25{{"gate-2.5: Approval"}}:::gate
     S4B["step-4b: Bicep Plan"]
     S4T["step-4t: TF Plan"]
     G3{{"gate-3: Approval"}}:::gate
@@ -56,8 +58,9 @@ flowchart TD
 
     S1 --> G1 --> S2 --> G2
     G2 --> S3
-    G2 --> S4B & S4T
-    S3 --> S4B & S4T
+    S3 --> S35
+    S35 --> G25
+    G25 --> S4B & S4T
     S4B & S4T --> G3
     G3 --> S5B & S5T
     S5B & S5T --> G4
@@ -69,6 +72,12 @@ flowchart TD
 Each node has a type (`agent-step`, `gate`, `subagent-fan-out`, `validation`), and each
 edge has a condition (`on_complete`, `on_skip`, `on_fail`). Conditional routing at IaC
 nodes is governed by the `decisions.iac_tool` field.
+
+!!! info "Read-only workflow graph"
+
+    The workflow DAG is auto-loaded by the Conductor. Users do not edit
+    `workflow-graph.json` directly. To customise the workflow, modify agent
+    definitions or skills instead.
 
 ### Gates and Approval Points
 
@@ -142,11 +151,11 @@ experienced 5 forced context summarisations in a single 3h39m session.
 
 ## :material-shield-check-outline: Quality and Safety Systems
 
-### 28 Validation Scripts
+### Validation Scripts
 
-Every convention is backed by a machine-enforceable check. The 26 script files drive
-the validation suite, organised into two parallel groups: `validate:_node` (22 Node.js
-validators) and `validate:_external` (5 external tool validators):
+Every convention is backed by a machine-enforceable check. The validation suite runs
+via two parallel groups: `validate:_node` (Node.js
+validators) and `validate:_external` (external tool validators):
 
 | Category            | Validators                                                                                |
 | ------------------- | ----------------------------------------------------------------------------------------- |
@@ -229,3 +238,12 @@ at runtime:
 
 Hooks are defined in `hooks.json` files with type (`command`), path to shell script,
 and timeout. They run automatically — agents do not invoke them explicitly.
+
+---
+
+!!! tip "Further Reading"
+
+    - [System Architecture](architecture.md) — the 8-step workflow, Conductor pattern, dual IaC tracks
+    - [Core Concepts](four-pillars.md) — agents, skills, instructions, and configuration registries
+    - [Agent Architecture](agents.md) — handoffs, the Challenger pattern, context shredding
+    - [MCP Integration](mcp-integration.md) — MCP servers and how agents invoke tools

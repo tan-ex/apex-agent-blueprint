@@ -12,7 +12,8 @@ directly in prompts.
 ### azure-defaults
 
 Provides regions, tags, naming conventions, AVM module references, and
-security baselines. Agents read this skill before every task.
+security baselines. This is the foundational skill — agents read it before
+every task.
 
 ```text
 @workspace What are the default required tags from azure-defaults?
@@ -101,7 +102,7 @@ and Log Analytics best practices.
 ### azure-artifacts
 
 Artifact template structures, H2 compliance rules, and documentation
-styling for all agent outputs (Steps 1-7).
+styling for all agent outputs (all steps).
 
 ```text
 @workspace What H2 headings are required in the implementation plan template?
@@ -167,6 +168,14 @@ Resume the workflow from step 4 using the existing session state.
 
 Machine-readable workflow DAG for the 8-step pipeline. Defines node
 types, edge conditions, gates, and fan-out patterns.
+
+## :material-account-cog-outline: Subagents
+
+!!! info "Not user-invocable"
+
+    Subagents are delegated to automatically by parent agents. You cannot
+    select them from the agent picker (`Ctrl+Shift+A`). See
+    [Workflow Prompts](workflow-prompts.md) for end-user scenarios.
 
 ```text
 @workspace Show the workflow graph edges and gate conditions.
