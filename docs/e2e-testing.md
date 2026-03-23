@@ -5,7 +5,7 @@ End-to-end testing for the InfraOps pipeline using the autonomous
 
 ## What Is Ralph Loop?
 
-Ralph Loop is a self-correcting E2E evaluation workflow that runs all 7 InfraOps
+Ralph Loop is a self-correcting E2E evaluation workflow that runs all InfraOps
 pipeline steps **without human gates**. It validates the entire agent pipeline
 autonomously — from requirements through deployment to documentation — with
 built-in self-correction, challenger reviews, and benchmark scoring.
@@ -35,7 +35,7 @@ To switch tracks, change the `IaC tool` field in the prompt file's Project Conte
 Validates all E2E artifacts for structural compliance (fast, no agent invocation):
 
 ```bash
-# Default project (e2e-ralph-loop)
+# Default project
 npm run e2e:validate
 
 # Specific project

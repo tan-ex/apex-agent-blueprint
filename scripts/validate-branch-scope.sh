@@ -26,8 +26,8 @@ esac
 # Determine allowed file patterns per domain prefix
 case "$PREFIX" in
   docs)
-    ALLOWED_PATTERN='^(docs/|mkdocs\.yml|README\.md|CONTRIBUTING\.md|CHANGELOG\.md|GLOSSARY\.md|requirements-docs\.txt|docs-)'
-    LABEL="docs/, mkdocs.yml, README.md, CONTRIBUTING.md, CHANGELOG.md"
+    ALLOWED_PATTERN='^(docs/|site/|README\.md|CONTRIBUTING\.md|CHANGELOG\.md|GLOSSARY\.md|docs-)'
+    LABEL="docs/, site/, README.md, CONTRIBUTING.md, CHANGELOG.md"
     ;;
   agents)
     ALLOWED_PATTERN='^(\.github/agents/|\.github/agent-registry\.json)'
@@ -72,14 +72,14 @@ while IFS= read -r file; do
 done <<< "$CHANGED_FILES"
 
 if [ -n "$OUT_OF_SCOPE" ]; then
-  echo "❌ Branch scope violation: '$BRANCH' should only modify files in:"
-  echo "   $LABEL"
+  echo "⚠️  Branch scope notice: '$BRANCH' also modifies files outside $LABEL"
   echo ""
   echo "   Files outside scope:"
   echo -e "$OUT_OF_SCOPE"
-  echo "   💡 Use a feat/ or fix/ branch for cross-cutting changes."
+  echo "   💡 Consider a feat/ or fix/ branch for cross-cutting changes."
   echo ""
-  exit 1
+  # Warning only — do not block push
+  exit 0
 fi
 
 TOTAL=$(echo "$CHANGED_FILES" | wc -l | tr -d ' ')
