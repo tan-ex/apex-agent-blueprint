@@ -98,7 +98,7 @@
     "MD034": false,
 
     // MD035: Horizontal rule style
-    // Disabled: MkDocs Material grid cards use *** as card separators
+    // Disabled: grid cards in docs/ use *** as card separators
     "MD035": false,
 
     // MD040: Fenced code blocks should have a language specifier
@@ -188,9 +188,10 @@
     ".github/skills/microsoft-foundry/**",
 
     // E2E test input documents (long-form RFQ/RFP prose, not production docs)
-    "docs/e2e-inputs/**",
+    "tests/e2e-inputs/**",
 
-    // MkDocs build output
-    "site/**",
+    // Astro Starlight build output
+    "site/dist/**",
+    "site/.astro/**",
   ],
 }
