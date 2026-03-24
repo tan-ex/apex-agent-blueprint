@@ -7,15 +7,20 @@
 #   .github/skills/         .github/instructions/  .github/prompts/
 #   .github/data/                                .github/copilot-instructions.md
 #   .github/CODEOWNERS      .github/ISSUE_TEMPLATE/ .github/PULL_REQUEST_TEMPLATE.md
-#   docs/                   scripts/               mcp/azure-pricing-mcp/
+#   docs/exec-plans/        scripts/               mcp/azure-pricing-mcp/
 #   package.json            lefthook.yml           commitlint.config.js
 #   *.json/.yml/.toml/.txt (root config files)
 #
 # NEVER synced (accelerator-specific, excluded):
 #   agent-output/           → user-generated project outputs
 #   infra/bicep/            → user project Bicep templates
+#   infra/terraform/        → user project Terraform configs
 #   .github/workflows/      → keep repository workflows as-is (GITHUB_TOKEN cannot push workflow changes)
 #   README.md               → accelerator-specific README
+#   CONTRIBUTING.md         → accelerator-specific contribution guide
+#   CHANGELOG.md            → accelerator-specific changelog
+#   site/                   → accelerator-specific documentation site
+#   docs/ (except exec-plans/) → accelerator-specific docs (docs/exec-plans/ IS synced)
 #
 # To sync workflow files from upstream, run locally: npm run sync:workflows
 #
@@ -56,8 +61,12 @@ env:
     .github/workflows/
     agent-output/
     infra/bicep/
+    infra/terraform/
     README.md
-    node_modules/
+    CONTRIBUTING.md
+    CHANGELOG.md
+    site/
+    docs/
 
 jobs:
   sync:
@@ -96,13 +105,26 @@ jobs:
 
           # Restore each excluded path from the base branch.
           # Hardcoded list — must match EXCLUDE_PATHS env.
-          for path in .github/workflows/ agent-output/ infra/bicep/ README.md; do
+          for path in .github/workflows/ agent-output/ infra/bicep/ infra/terraform/ README.md CONTRIBUTING.md CHANGELOG.md site/; do
             git rm -r --cached --ignore-unmatch -- "$path" > /dev/null 2>&1 || true
             rm -rf -- "$path" 2>/dev/null || true
             if git ls-tree --name-only "${BASE_SHA}" -- "$path" | grep -q .; then
               git checkout "${BASE_SHA}" -- "$path"
             fi
           done
+
+          # docs/ is excluded EXCEPT docs/exec-plans/ which syncs from upstream.
+          # 1. Remove all docs/ from index (upstream version)
+          git rm -r --cached --ignore-unmatch -- docs/ > /dev/null 2>&1 || true
+          rm -rf docs/ 2>/dev/null || true
+          # 2. Restore local docs/ from base branch
+          if git ls-tree --name-only "${BASE_SHA}" -- docs/ | grep -q .; then
+            git checkout "${BASE_SHA}" -- docs/
+          fi
+          # 3. Re-apply upstream docs/exec-plans/ (upstream wins for this subfolder)
+          if git ls-tree --name-only "upstream/${UPSTREAM_REF}" -- docs/exec-plans/ | grep -q .; then
+            git checkout "upstream/${UPSTREAM_REF}" -- docs/exec-plans/
+          fi
 
           # Detect whether anything changed relative to the base branch
           changed=false
@@ -123,7 +145,11 @@ jobs:
       - name: Assert excluded paths are unchanged
         if: steps.sync.outputs.changed == 'true'
         run: |
-          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|agent-output/|infra/bicep/|README\.md$)' || true)
+          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|agent-output/|infra/bicep/|infra/terraform/|README\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|site/)' || true)
+          # Check docs/ changes, but allow docs/exec-plans/ through
+          docs_leaked=$(git diff --cached --name-only | grep -E '^docs/' | grep -v '^docs/exec-plans/' || true)
+          leaked="${leaked}${leaked:+$'\n'}${docs_leaked}"
+          leaked=$(echo "$leaked" | sed '/^$/d')
           if [ -n "$leaked" ]; then
             echo "::error::Excluded paths were modified by sync."
             echo "$leaked" | sed 's/^/  /'
@@ -142,7 +168,7 @@ jobs:
           git commit -m "chore(sync): upstream sync from ${UPSTREAM_REPO}@${UPSTREAM_REF}
 
           Synced at $(date -u +"%Y-%m-%d %H:%M UTC")
-          Excluded: agent-output/ infra/bicep/ .github/workflows/ README.md" \
+          Excluded: agent-output/ infra/bicep/ infra/terraform/ .github/workflows/ README.md CONTRIBUTING.md CHANGELOG.md site/ docs/ (except docs/exec-plans/)" \
             --allow-empty
 
           set +e
@@ -181,10 +207,10 @@ jobs:
           **Always synced from upstream:**
           \`.devcontainer/\` · \`.vscode/\` · \`.github/agents/\` · \`.github/skills/\` · \`.github/instructions/\`
           \`.github/prompts/\` · \`.github/data/\` · \`.github/copilot-instructions.md\`
-          \`docs/\` · \`scripts/\` · \`mcp/azure-pricing-mcp/\` · all root config files
+          \`docs/exec-plans/\` · \`scripts/\` · \`mcp/azure-pricing-mcp/\` · all root config files
 
           **Excluded (accelerator-specific, never overwritten):**
-          \`agent-output/\` · \`infra/bicep/\` · \`.github/workflows/\` · \`README.md\`
+          \`agent-output/\` · \`infra/bicep/\` · \`infra/terraform/\` · \`.github/workflows/\` · \`README.md\` · \`CONTRIBUTING.md\` · \`CHANGELOG.md\` · \`site/\` · \`docs/\` (except \`docs/exec-plans/\`)
 
           > Policy: always manual review, no auto-merge."
 
