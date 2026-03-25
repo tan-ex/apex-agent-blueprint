@@ -100,6 +100,9 @@ jobs:
           BASE_SHA=$(git rev-parse HEAD)
           git checkout -B "${SYNC_BRANCH}"
 
+          # Mirror upstream tracked content so removed upstream paths are deleted here too.
+          git rm -r --quiet --ignore-unmatch .
+
           # Take EVERYTHING from upstream into the working tree and index
           git checkout "upstream/${UPSTREAM_REF}" -- .
 
