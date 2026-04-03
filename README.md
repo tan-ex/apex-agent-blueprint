@@ -1,11 +1,11 @@
 <!-- markdownlint-disable MD013 MD033 MD041 -->
 
-# Agentic InfraOps Accelerator
+# APEX Accelerator
 
 <div align="center">
   <img
-   src="https://capsule-render.vercel.app/api?type=waving&height=180&color=0:0A66C2,50:0078D4,110:00B7C3&text=Agentic%20InfraOps&fontSize=44&fontColor=FFFFFF&fontAlignY=34&desc=Azure%20infrastructure%20engineered%20by%20agents&descAlignY=56"
-   alt="Agentic InfraOps banner" />
+   src="https://capsule-render.vercel.app/api?type=waving&height=180&color=0:0A66C2,50:0078D4,110:00B7C3&text=APEX&fontSize=44&fontColor=FFFFFF&fontAlignY=34&desc=Agentic%20Platform%20Engineering%20eXperience%20for%20Azure&descAlignY=56"
+   alt="APEX banner" />
 </div>
 
 > **Modernize your Azure Infrastructure with AI.** A production-ready template for building Well-Architected
@@ -23,95 +23,30 @@ This accelerator provides the scaffolding and governance to move from requiremen
 using an orchestrated multi-agent workflow. It leverages domain-specific AI agents to ensure every deployment
 is Well-Architected, governed, and documented.
 
-**What you get**: 14 specialized agents, 18 skills, 27 validation scripts, a full dev container with all
+**What you get**: Specialized agents, skills, validation scripts, a full dev container with all
 tools pre-installed, and an optional weekly sync workflow that keeps your agents and skills up to date with
-the [upstream project](https://github.com/jonathan-vella/azure-agentic-infraops).
+the [upstream APEX project](https://github.com/jonathan-vella/azure-agentic-infraops).
 
 ---
 
 ## Multi-Agent Workflow
 
-Agentic InfraOps coordinates specialized AI agents through a complete infrastructure development cycle.
-Invoke the **InfraOps Conductor** (`Ctrl+Shift+I`) to begin.
+APEX coordinates specialized AI agents through a complete infrastructure development cycle.
+Invoke the **Conductor** (`Ctrl+Shift+I`) to begin.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as 👤 User
-    participant C as 🎼 Conductor
-    participant R as 📋 Requirements
-    participant A as 🏛️ Architect
-    participant P as 📐 IaC Plan
-    participant B as ⚒️ IaC Code
-    participant D as 🚀 Deploy
-    participant W as 📚 As-Built
+| Step | Phase | Output | Gate |
+| --- | --- | --- | --- |
+| 1 | Requirements | `01-requirements.md` | Approval |
+| 2 | Architecture | `02-assessment.md` + cost estimate | Approval |
+| 3 | Design (opt) | Diagrams and ADRs | — |
+| 3.5 | Governance | `04-governance-constraints.md` | Approval |
+| 4 | IaC Plan | `04-implementation-plan.md` | Approval |
+| 5 | IaC Code | `infra/bicep/{project}/` or `infra/terraform/{project}/` | Validation |
+| 6 | Deploy | `06-deployment-summary.md` | Approval |
+| 7 | As-Built | `07-*.md` documentation suite | — |
 
-    Note over C: ORCHESTRATION LAYER<br/>AI prepares. Humans decide.
-
-    U->>C: Describe infrastructure intent
-    C->>R: Translate intent into structured requirements
-    R-->>C: 01-requirements.md
-    C->>U: Present requirements
-
-    rect rgba(255, 200, 0, 0.15)
-    Note over U,C: 🛑 HUMAN APPROVAL GATE
-    U-->>C: Approve requirements
-    end
-
-    C->>A: Assess architecture (WAF + Cost)
-    Note right of A: cost-estimate-subagent<br/>handles pricing queries
-    A-->>C: 02-assessment.md + 03-cost-estimate.md
-    C->>U: Present architecture
-
-    rect rgba(255, 200, 0, 0.15)
-    Note over U,C: 🛑 HUMAN APPROVAL GATE
-    U-->>C: Approve architecture
-    end
-
-    C->>P: Create implementation plan + governance
-    Note right of P: governance-discovery-subagent<br/>queries Azure Policy via REST API
-    P-->>C: 04-plan.md + governance constraints
-    C->>U: Present plan
-
-    rect rgba(255, 200, 0, 0.15)
-    Note over U,C: 🛑 HUMAN APPROVAL GATE
-    U-->>C: Approve plan
-    end
-
-    C->>B: Generate IaC templates (AVM-first)
-    B-->>C: infra/bicep/{project} or infra/terraform/{project}
-
-    rect rgba(0, 150, 255, 0.08)
-    Note over C,B: 🔍 Subagent Validation Loop
-    Note right of B: lint-subagent → PASS/FAIL<br/>review-subagent → APPROVED/REVISION
-    alt ✅ Validation passes
-        C->>U: Present templates for deployment
-        rect rgba(255, 200, 0, 0.15)
-        Note over U,C: 🛑 HUMAN APPROVAL GATE
-        U-->>C: Approve for deployment
-        end
-    else ⚠️ Validation fails
-        C->>B: Revise with feedback
-    end
-    end
-
-    C->>D: Execute deployment
-    Note right of D: what-if/plan-subagent<br/>previews changes first
-    D-->>C: 06-deployment-summary.md
-    C->>U: Present deployment summary
-
-    rect rgba(255, 200, 0, 0.15)
-    Note over U,D: 🛑 HUMAN VERIFICATION
-    U-->>C: Verify deployment
-    end
-
-    C->>W: Generate workload documentation
-    Note right of W: Reads all prior artifacts (01-06)<br/>+ queries deployed resource state
-    W-->>C: 07-*.md documentation suite
-    C->>U: Present as-built docs
-
-    Note over U,W: ✅ AI Orchestrated. Human Governed. Azure Ready.
-```
+All outputs go to `agent-output/{project}/`. The Conductor orchestrates the full
+workflow with human approval gates — **AI prepares, humans decide**.
 
 ---
 
@@ -174,7 +109,7 @@ npm run sync:workflows
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm install`            | Install Node.js dependencies (validation scripts, linting)                                                                                                                                    |
 | `npm run init`           | **One-time setup** — replaces all references to the accelerator template repo with your repo's URL (auto-detected from git remote). Run `npm run init -- --dry-run` first to preview changes. |
-| `npm run sync:workflows` | Fetches the latest GitHub Actions workflows from the [upstream project](https://github.com/jonathan-vella/azure-agentic-infraops) into your `.github/workflows/` directory                    |
+| `npm run sync:workflows` | Fetches the latest GitHub Actions workflows from the [upstream APEX project](https://github.com/jonathan-vella/azure-agentic-infraops) into your `.github/workflows/` directory                |
 
 After running, review and commit:
 
@@ -207,10 +142,10 @@ don't appear in the `Ctrl+Shift+A` picker, check that the setting is in your
 ### 6. Start the Conductor
 
 1. Open Copilot Chat (`Ctrl+Shift+I`)
-2. Select **InfraOps Conductor** from the agent picker
+2. Select **Conductor** from the agent picker
 3. Describe your infrastructure intent:
    _"I need a web application with a SQL database, Key Vault, and Application Insights in Azure"_
-4. The Conductor guides you through all 8 steps with human approval gates
+4. The Conductor guides you through all steps with human approval gates
 
 ---
 
@@ -390,8 +325,8 @@ cd infra/terraform/{project} && terraform init -backend=false && terraform valid
 
 ## Resources
 
-- [Upstream project (azure-agentic-infraops)](https://github.com/jonathan-vella/azure-agentic-infraops)
-- [Full documentation site](https://jonathan-vella.github.io/azure-agentic-infraops/)
+- [APEX upstream project](https://github.com/jonathan-vella/azure-agentic-infraops)
+- [APEX documentation](https://jonathan-vella.github.io/azure-agentic-infraops/)
 - [MicroHack (hands-on exercises)](https://jonathan-vella.github.io/microhack-agentic-infraops/)
 - [Prompt Guide](https://github.com/jonathan-vella/azure-agentic-infraops/tree/main/docs/prompt-guide)
 - [FAQ](https://jonathan-vella.github.io/azure-agentic-infraops/faq/)
