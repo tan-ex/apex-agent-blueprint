@@ -29,27 +29,6 @@ the [upstream APEX project](https://github.com/jonathan-vella/azure-agentic-infr
 
 ---
 
-## Multi-Agent Workflow
-
-APEX coordinates specialized AI agents through a complete infrastructure development cycle.
-Invoke the **Conductor** (`Ctrl+Shift+I`) to begin.
-
-| Step | Phase | Output | Gate |
-| --- | --- | --- | --- |
-| 1 | Requirements | `01-requirements.md` | Approval |
-| 2 | Architecture | `02-assessment.md` + cost estimate | Approval |
-| 3 | Design (opt) | Diagrams and ADRs | — |
-| 3.5 | Governance | `04-governance-constraints.md` | Approval |
-| 4 | IaC Plan | `04-implementation-plan.md` | Approval |
-| 5 | IaC Code | `infra/bicep/{project}/` or `infra/terraform/{project}/` | Validation |
-| 6 | Deploy | `06-deployment-summary.md` | Approval |
-| 7 | As-Built | `07-*.md` documentation suite | — |
-
-All outputs go to `agent-output/{project}/`. The Conductor orchestrates the full
-workflow with human approval gates — **AI prepares, humans decide**.
-
----
-
 ## Prerequisites
 
 | Requirement            | Details                                              |
@@ -125,28 +104,6 @@ git add -A && git commit -m "chore: initialize from template"
 az login
 ```
 
-### 5. Verify VS Code Settings
-
-The dev container configures these automatically, but confirm they are active:
-
-```json
-{
-  "chat.customAgentInSubagent.enabled": true
-}
-```
-
-This setting is required for the Conductor to delegate to specialized agents. If agents
-don't appear in the `Ctrl+Shift+A` picker, check that the setting is in your
-**VS Code User Settings** (not just workspace settings).
-
-### 6. Start the Conductor
-
-1. Open Copilot Chat (`Ctrl+Shift+I`)
-2. Select **Conductor** from the agent picker
-3. Describe your infrastructure intent:
-   _"I need a web application with a SQL database, Key Vault, and Application Insights in Azure"_
-4. The Conductor guides you through all steps with human approval gates
-
 ---
 
 ## Project Structure
@@ -166,8 +123,8 @@ agent-output/          # Generated artifacts organized by project
 infra/
   bicep/{project}/     # Bicep templates (main.bicep + modules/)
   terraform/{project}/ # Terraform configurations (main.tf + modules/)
-mcp/                   # MCP servers (Azure Pricing)
-scripts/               # Validation scripts (27 validators)
+mcp/                   # MCP servers
+scripts/               # Validation scripts
 docs/                  # Documentation site source
 ```
 
