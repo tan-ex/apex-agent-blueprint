@@ -35,12 +35,21 @@ else
     printf "    terraform-mcp-server  ⚠️  Go not found — skipping\n"
 fi
 
+# ─── Deno ─────────────────────────────────────────────────────────────────────
+# Deno is upgraded automatically on container rebuild via the devcontainer
+# feature (version: latest). No in-container upgrade needed.
+if command -v deno &>/dev/null; then
+    printf "    deno                  ✅ %s\n" "$(deno --version 2>/dev/null | head -n1)"
+else
+    printf "    deno                  ⚠️  not installed — rebuild container\n"
+fi
+
 # ─── Azure Pricing MCP ───────────────────────────────────────────────────────
 MCP_DIR="${WORKSPACE_FOLDER:-$PWD}/mcp/azure-pricing-mcp"
 if [ -f "$MCP_DIR/.venv/bin/pip" ]; then
     "$MCP_DIR/.venv/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
     printf "    azure-pricing-mcp     "
-    "$MCP_DIR/.venv/bin/pip" install --quiet -e "$MCP_DIR" \
+    "$MCP_DIR/.venv/bin/pip" install --quiet -e "$MCP_DIR[azure]" \
         && printf "✅ updated\n" \
         || printf "⚠️  update failed (continuing)\n"
 fi
