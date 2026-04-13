@@ -106,8 +106,8 @@ Agents that specify `Claude Opus 4.6` as priority model do so deliberately:
 - **Opus-first agents** (requirements, architect, iac-plan, diagnose,
   context-optimizer) require deeper reasoning for architecture decisions,
   WAF assessments, planning accuracy, and complex analysis
-- **GPT-5.4 agents** (orchestrator, governance, as-built, challenger wrapper,
-  e2e-orchestrator, codegen, deploy) prioritize
+- **GPT-5.4 workflow and execution agents** (orchestrator, governance,
+  as-built, challenger wrapper, e2e-orchestrator, codegen, deploy) prioritize
   strong general reasoning for orchestration, diagrams, governance synthesis,
   documentation generation, code generation, deployment execution, and structured reviews
 - **Claude Sonnet 4.6 agents** (orchestrator fast path, design, and validation/preview subagents) balance
@@ -116,22 +116,22 @@ Agents that specify `Claude Opus 4.6` as priority model do so deliberately:
 
 Current model assignments:
 
-| Agent / Group          | Model                   | Rationale                |
-| ---------------------- | ----------------------- | ------------------------ |
-| Orchestrator              | GPT-5.4                 | Orchestration            |
-| Orchestrator (Fast Path)  | Claude Sonnet 4.6       | Streamlined orchestration|
-| Requirements           | Claude Opus 4.6         | Deep understanding       |
-| Architect              | Claude Opus 4.6         | WAF analysis + cost      |
-| Design                 | Claude Sonnet 4.6       | Diagram generation       |
-| Governance             | GPT-5.4                 | Governance discovery     |
-| IaC Planner (unified)  | Claude Opus 4.6         | Planning accuracy        |
-| Bicep / Terraform Code | GPT-5.4                 | Code generation          |
-| Deploy                 | GPT-5.4                 | Deployment execution     |
-| As-Built               | GPT-5.4                 | Documentation generation |
-| Diagnose               | Claude Opus 4.6         | Complex troubleshooting  |
-| Context Optimizer      | Claude Opus 4.6         | Deep analysis            |
-| Challenger wrapper     | GPT-5.4                 | Review orchestration     |
-| Subagents              | Claude Sonnet 4.6 / GPT-5.3-Codex | Isolated validation |
+| Agent / Group            | Model                             | Rationale                 |
+| ------------------------ | --------------------------------- | ------------------------- |
+| Orchestrator             | GPT-5.4                           | Orchestration             |
+| Orchestrator (Fast Path) | Claude Sonnet 4.6                 | Streamlined orchestration |
+| Requirements             | Claude Opus 4.6                   | Deep understanding        |
+| Architect                | Claude Opus 4.6                   | WAF analysis + cost       |
+| Design                   | Claude Sonnet 4.6                 | Diagram generation        |
+| Governance               | GPT-5.4                           | Governance discovery      |
+| IaC Planner (unified)    | Claude Opus 4.6                   | Planning accuracy         |
+| Bicep / Terraform Code   | GPT-5.4                           | Code generation           |
+| Deploy                   | GPT-5.4                           | Deployment execution      |
+| As-Built                 | GPT-5.4                           | Documentation generation  |
+| Diagnose                 | Claude Opus 4.6                   | Complex troubleshooting   |
+| Context Optimizer        | Claude Opus 4.6                   | Deep analysis             |
+| Challenger wrapper       | GPT-5.4                           | Review orchestration      |
+| Subagents                | Claude Sonnet 4.6 / GPT-5.3-Codex | Isolated validation       |
 
 **Rules:**
 
@@ -158,7 +158,7 @@ the multi-step workflow:
 | 5t   | Terraform Code       | `06t-terraform-codegen.agent.md` |
 | 6t   | Terraform Deploy     | `07t-terraform-deploy.agent.md`  |
 | 7    | As-Built             | `08-as-built.agent.md`           |
-| —    | Orchestrator   | `01-orchestrator.agent.md`          |
+| —    | Orchestrator         | `01-orchestrator.agent.md`       |
 | —    | Diagnose             | `09-diagnose.agent.md`           |
 | —    | Challenger (wrapper) | `10-challenger.agent.md`         |
 
@@ -167,15 +167,15 @@ the multi-step workflow:
 Subagents live in `.github/agents/_subagents/` and are `user-invocable: false`. They isolate
 expensive or specialized work from their parent agent's context window.
 
-| Subagent                        | Parent Agent                | Purpose                                              |
-| ------------------------------- | --------------------------- | ---------------------------------------------------- |
-| `challenger-review-subagent`    | All workflow agents         | Adversarial review (comprehensive + rotating lenses) |
-| `cost-estimate-subagent`        | Architect                   | Pricing MCP queries                                  |
-| `governance-discovery-subagent` | IaC Planner                 | Azure Policy REST API discovery                      |
-| `bicep-validate-subagent`       | Bicep Code                  | Lint + AVM/security code review                      |
-| `bicep-whatif-subagent`         | Bicep Deploy                | `az deployment group what-if`                        |
-| `terraform-validate-subagent`   | Terraform Code              | Lint + AVM-TF/security code review                   |
-| `terraform-plan-subagent`       | Terraform Deploy            | `terraform plan` change preview                      |
+| Subagent                        | Parent Agent        | Purpose                                              |
+| ------------------------------- | ------------------- | ---------------------------------------------------- |
+| `challenger-review-subagent`    | All workflow agents | Adversarial review (comprehensive + rotating lenses) |
+| `cost-estimate-subagent`        | Architect           | Pricing MCP queries                                  |
+| `governance-discovery-subagent` | IaC Planner         | Azure Policy REST API discovery                      |
+| `bicep-validate-subagent`       | Bicep Code          | Lint + AVM/security code review                      |
+| `bicep-whatif-subagent`         | Bicep Deploy        | `az deployment group what-if`                        |
+| `terraform-validate-subagent`   | Terraform Code      | Lint + AVM-TF/security code review                   |
+| `terraform-plan-subagent`       | Terraform Deploy    | `terraform plan` change preview                      |
 
 Subagent definition rules:
 
@@ -221,7 +221,7 @@ When an agent outputs a specific document type, it MUST treat these as authorita
 - Cost estimates: `.github/skills/azure-artifacts/references/cost-estimate-standards.md`
 - Workload docs: `.github/skills/docs-writer/references/workload-documentation.md`
 - Markdown style: `.github/instructions/markdown.instructions.md`
-- Bicep: `.github/instructions/iac-best-practices.instructions.md`
+- Bicep: `.github/instructions/iac-bicep-best-practices.instructions.md`
 
 If an agent contains an embedded template in its body, it MUST match the relevant instruction file.
 
@@ -335,7 +335,7 @@ be 3-5 lines. Place them after the first `#` heading, before the body content.
 | -------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `<investigate_before_answering>` | Agent researches before deciding (Architect, Planners, Diagnose) | ONE-SHOT agents (Requirements), procedural wrappers (lint subagents) |
 | `<output_contract>`              | Agent produces a formal artifact with defined structure          | Agent has no structured output                                       |
-| `<context_awareness>`            | Agent definition exceeds ~300 lines                              | Small agents, subagents                                              |
+| `<context_awareness>`            | Agent definition exceeds ~350 lines                              | Small agents, subagents                                              |
 | `<scope_fencing>`                | Agent produces scoped artifacts where creep is a risk            | Agents whose job is comprehensive analysis (Architect)               |
 | `<empty_result_recovery>`        | Agent queries Azure APIs that may return empty results           | Agents that don't call external APIs                                 |
 | `<subagent_budget>`              | Agent orchestrates 3+ subagents                                  | Leaf agents that don't delegate                                      |

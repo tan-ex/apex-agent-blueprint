@@ -116,20 +116,16 @@ const DEPRECATED_PATTERNS = [
     severity: "error",
   },
 
-  // Dead documentation paths - IGNORED
-  // These folders were removed but many legacy files still reference them.
-  // The content is deprecated and will be cleaned up over time.
-  // Uncomment to re-enable detection:
-  // {
-  //   pattern: /docs\/guides\//gi,
-  //   message: "Reference to non-existent docs/guides/ folder",
-  //   severity: "warn",
-  // },
-  // {
-  //   pattern: /docs\/reference\//gi,
-  //   message: "Reference to non-existent docs/reference/ folder",
-  //   severity: "warn",
-  // },
+  // Detect stale references to the retired top-level docs/ tree.
+  // The canonical documentation source is site/src/content/docs/.
+  // Historical references in changelogs and archival records are excluded
+  // via EXCLUDE_PATTERNS.
+  {
+    pattern: /(?<![\w/])docs\/(?!tf-support|adr\/|diagrams\/)[\w-]+/gi,
+    message:
+      "Reference to retired docs/ tree (canonical source is site/src/content/docs/)",
+    severity: "warn",
+  },
 
   // Agent mentions that should be skills (in prose, not agent definitions)
   {
@@ -166,7 +162,7 @@ const DEPRECATED_PATTERNS = [
 
 // Folders to scan
 const SCAN_FOLDERS = [
-  "docs",
+  "site/src/content/docs",
   ".github/agents",
   ".github/skills",
   ".github/instructions",
@@ -182,12 +178,36 @@ const SCAN_ROOT_FILES = ["README.md", "CONTRIBUTING.md", "CHANGELOG.md"];
 const EXCLUDE_PATTERNS = [
   /node_modules/,
   /infra\//,
-  /CHANGELOG\.md$/, // Historical log — old names are intentional
+  /(?:^|\/)changelog\.md$/i, // Historical logs may reference retired paths intentionally
+  /^QUALITY_SCORE\.md$/,
+  /^tests\/exec-plans\/tech-debt-tracker\.md$/,
   /agent-output\//, // Generated artifacts may contain old references
 ];
 
 let errorCount = 0;
 let warnCount = 0;
+
+function getLineText(content, index) {
+  const lineStart = content.lastIndexOf("\n", index) + 1;
+  const lineEnd = content.indexOf("\n", index);
+  return content.slice(lineStart, lineEnd === -1 ? content.length : lineEnd);
+}
+
+function shouldIgnoreDeprecatedMatch(message, lineText, matchedText) {
+  if (!message.includes("retired docs/ tree")) return false;
+
+  const branchExamplePatterns = [
+    /git checkout -b docs\//i,
+    /^\|\s*`docs\//,
+    /branch name.*`docs\//i,
+  ];
+
+  if (branchExamplePatterns.some((pattern) => pattern.test(lineText))) {
+    return true;
+  }
+
+  return matchedText === "docs/update-workflow-guide";
+}
 
 function scanFile(filePath, content) {
   const relativePath = path.relative(ROOT, filePath);
@@ -200,6 +220,11 @@ function scanFile(filePath, content) {
     let match;
     while ((match = pattern.exec(content)) !== null) {
       const lineNum = content.substring(0, match.index).split("\n").length;
+      const lineText = getLineText(content, match.index);
+      if (shouldIgnoreDeprecatedMatch(message, lineText, match[0])) {
+        continue;
+      }
+
       const icon = severity === "error" ? "❌" : "⚠️";
       console.log(`${icon} ${relativePath}:${lineNum} - ${message}`);
       console.log(`   Found: "${match[0]}"`);
@@ -247,7 +272,10 @@ function main() {
   }
 
   // Scan additional directories not covered by workspace-index
-  for (const folder of ["docs", ".github/skills/azure-artifacts/templates"]) {
+  for (const folder of [
+    "site/src/content/docs",
+    ".github/skills/azure-artifacts/templates",
+  ]) {
     scanDirectory(path.join(ROOT, folder));
   }
 
