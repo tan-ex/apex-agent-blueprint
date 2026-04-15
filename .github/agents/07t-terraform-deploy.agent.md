@@ -159,11 +159,34 @@ chmod +x bootstrap-backend.sh && ./bootstrap-backend.sh
 Follow `iac-common/references/placeholder-scan-protocol.md`.
 Scan `*.tfvars` files, collect values via `askQuestions`, confirm none remain.
 
-### Step 4: Validate Configuration
+### Step 4: Detect Deployment Method and Validate
 
 ```bash
 cd infra/terraform/{project}
 
+# Check for azd project (azure.yaml → use azd; no azure.yaml → pure Terraform)
+if [ -f "azure.yaml" ]; then echo "azd project"; else echo "Pure Terraform"; fi
+```
+
+**If azd project detected** (preferred when `azure.yaml` exists):
+
+```bash
+# Create/select environment (use {project}-{env} naming)
+azd env new {project}-{env}
+azd env set AZURE_LOCATION swedencentral
+
+# Preview changes
+azd provision --preview
+
+# Deploy (after approval)
+azd provision
+```
+
+Skip to Step 6 (Post-Deployment Verification) after `azd provision` completes.
+
+**If pure Terraform** (no `azure.yaml` — fallback):
+
+```bash
 # Initialize with backend configuration
 terraform init
 
@@ -235,7 +258,7 @@ Read `04-implementation-plan.md` `## Deployment Phases` to determine phased vs s
 2. `terraform apply tfplan` — run `terraform output`, verify via ARG, present completion gate
 3. Repeat for next phase
 
-Or use deploy scripts: `bash deploy.sh --phase {name}` / `pwsh -File deploy.ps1 -Phase {name}`
+Or use deploy scripts (deprecated): `bash deploy.sh --phase {name}` / `pwsh -File deploy.ps1 -Phase {name}`
 
 **Single**: `terraform plan -out=tfplan` → get approval → `terraform apply tfplan`
 

@@ -1,7 +1,7 @@
 ---
 name: 06b-Bicep CodeGen
 description: Expert Azure Bicep Infrastructure as Code specialist that creates near-production-ready Bicep templates following best practices and Azure Verified Modules standards. Validates, tests, and ensures code quality.
-model: ["GPT-5.4"]
+model: ["Claude Sonnet 4.6"]
 user-invocable: true
 agents: ["bicep-validate-subagent", "challenger-review-subagent"]
 tools:
@@ -54,6 +54,30 @@ handoffs:
 
 # Bicep Code Agent
 
+<!-- Recommended reasoning_effort: medium -->
+
+<investigate_before_answering>
+Read the implementation plan and governance constraints before generating any Bicep code.
+Verify AVM module availability and parameter schemas via preflight checks.
+</investigate_before_answering>
+
+<context_awareness>
+Large agent definition (~590 lines). At >60% context, load SKILL.digest.md variants.
+At >80% switch to SKILL.minimal.md and stop re-reading predecessor artifacts.
+</context_awareness>
+
+<scope_fencing>
+Generate Bicep templates and validation artifacts only.
+Do not deploy — that is the Deploy agent's responsibility.
+Do not modify architecture decisions — hand back to Planner.
+</scope_fencing>
+
+<output_contract>
+Phase 1: agent-output/{project}/04-preflight-check.md
+Phase 2-4: infra/bicep/{project}/ templates
+Phase 5: agent-output/{project}/05-implementation-reference.md
+</output_contract>
+
 ## Investigate Before Answering
 
 Read the implementation plan and governance constraints before generating any Bicep code.
@@ -103,7 +127,7 @@ Before doing any work, read these skills:
 - Key Vault: set `networkAcls.bypass: 'AzureServices'` when enabledForDeployment is true
 - Use `take()` for length-constrained resources (KV≤24, Storage≤24)
 - Use `resourceId(subscription().subscriptionId, ...)` for cross-RG refs at subscription scope
-- Generate `azure.yaml` + `deploy.ps1` + `.bicepparam` per environment
+- Generate `azure.yaml` (required) + `deploy.ps1` (deprecated fallback) + `.bicepparam` per environment
 - Run `bicep build` + `bicep lint` after generation
 - Save `05-implementation-reference.md` + update project README
 
@@ -219,24 +243,24 @@ Build templates in dependency order from `04-implementation-plan.md`.
 If **phased**: add `@allowed` `phase` parameter, wrap modules in `if phase == 'all' || phase == '{name}'`.
 If **single**: no phase parameter needed.
 
-| Round | Content                                                                             |
-| ----- | ----------------------------------------------------------------------------------- |
-| 1     | `main.bicep` (params, vars, `uniqueSuffix`), `main.bicepparam`                      |
-| 2     | Networking, Key Vault, Log Analytics + App Insights                                 |
-| 3     | Compute, Data, Messaging                                                            |
-| 4     | Budget + alerts, Diagnostic settings, role assignments, `azure.yaml` + `deploy.ps1` |
+| Round | Content                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------------ |
+| 1     | `main.bicep` (params, vars, `uniqueSuffix`), `main.bicepparam`                                   |
+| 2     | Networking, Key Vault, Log Analytics + App Insights                                              |
+| 3     | Compute, Data, Messaging                                                                         |
+| 4     | Budget + alerts, Diagnostic settings, role assignments, `azure.yaml` + `deploy.ps1` (deprecated) |
 
 After each round: `bicep build` to catch errors early.
 
-### Phase 3: Deployment Script
+### Phase 3: Deployment Artifacts
 
-Generate `infra/bicep/{project}/azure.yaml` (azd manifest) with:
+Generate `infra/bicep/{project}/azure.yaml` (azd manifest — **primary deployment method**) with:
 
-- `name`, `metadata.template`, `infra.provider: bicep`, `infra.path`, `infra.module`
+- `name: {project}`, `metadata.template`, `infra.provider: bicep`, `infra.path: .` (co-located), `infra.module`
 - `hooks.preprovision` — ARM token validation, banner
 - `hooks.postprovision` — resource verification via ARG
 
-Also generate `infra/bicep/{project}/deploy.ps1` (legacy fallback) with:
+Also generate `infra/bicep/{project}/deploy.ps1` (deprecated fallback) with:
 
 - Banner, parameter validation (ResourceGroup, Location, Environment, Phase)
 - `az group create` + `az deployment group create --template-file --parameters`
@@ -287,8 +311,8 @@ Save validation status in `05-implementation-reference.md`. Run `npm run lint:ar
 infra/bicep/{project}/
 ├── main.bicep              # Entry point — uniqueSuffix, orchestrates modules
 ├── main.bicepparam         # Environment-specific parameters
-├── azure.yaml              # azd project manifest (preferred deployment method)
-├── deploy.ps1              # PowerShell deployment script (legacy fallback)
+├── azure.yaml              # azd project manifest (infra.path: . — co-located) — PRIMARY
+├── deploy.ps1              # PowerShell deployment script (DEPRECATED)
 └── modules/
     ├── budget.bicep        # Azure Budget + forecast alerts + anomaly detection
     ├── key-vault.bicep     # Per-resource modules
@@ -302,8 +326,8 @@ Expected output in `infra/bicep/{project}/`:
 
 - `main.bicep` — Entry point with uniqueSuffix, orchestrates modules
 - `main.bicepparam` — Environment-specific parameters
-- `azure.yaml` — azd project manifest
-- `deploy.ps1` — PowerShell deployment script (legacy fallback)
+- `azure.yaml` — azd project manifest (primary deployment method)
+- `deploy.ps1` — PowerShell deployment script (deprecated fallback)
 - `modules/*.bicep` — Per-resource AVM module wrappers
 
 In `agent-output/{project}/`:
