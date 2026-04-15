@@ -3,12 +3,15 @@ name: Deploy Infrastructure
 on:
   push:
     branches: [main]
-    paths: ['infra/**']
+    paths: ["infra/bicep/**"]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+    defaults:
+      run:
+        working-directory: infra/bicep/${{ vars.PROJECT_NAME }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,5 +26,5 @@ jobs:
           scope: subscription
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           region: eastus
-          template: ./infra/main.bicep
+          template: infra/bicep/${{ vars.PROJECT_NAME }}/main.bicep
           parameters: environmentName=${{ vars.ENVIRONMENT }}

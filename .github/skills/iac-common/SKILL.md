@@ -15,13 +15,20 @@ Shared deployment patterns used by both Bicep and Terraform deploy agents
 
 ## Deployment Strategies
 
-### azd Deployment (recommended for Bicep projects with azure.yaml)
+### azd Deployment (default for all projects)
 
-Use `azd` when the project has an `azure.yaml` manifest:
+Use `azd` for all projects. Each project is a self-contained
+azd project with `azure.yaml` and `.azure/` inside `infra/{iac}/{project}/`.
 
 ```bash
-# Create/select environment
-azd env new dev
+# Navigate to the project directory (azure.yaml must be here)
+cd infra/{iac}/{project}
+
+# Or use -C flag from repo root
+azd -C infra/{iac}/{project} env list
+
+# Create/select environment (use {project}-{env} naming to avoid collisions)
+azd env new {project}-{env}
 azd env set AZURE_LOCATION swedencentral
 
 # Preview changes (replaces what-if)
@@ -34,7 +41,7 @@ azd provision
 azd up
 ```
 
-**azd hooks** replace custom deploy.ps1 pre/post steps:
+**azd hooks** replace the deprecated deploy.ps1 pre/post steps:
 
 - `preprovision` — auth validation, banner, prerequisite checks
 - `postprovision` — resource verification, diagnostic setup
@@ -56,7 +63,11 @@ Before `azd provision --no-prompt`, verify these environment values are set:
 Run `azd env get-values` and check for missing values. If any are empty,
 set them via `azd env set {KEY} {VALUE}` before attempting `--no-prompt`.
 
-### Phased Deployment via deploy.ps1 (legacy, backward-compatible)
+### Phased Deployment via deploy.ps1 (deprecated)
+
+> **⚠️ Deprecated.** Use azd hooks (`preprovision`/`postprovision`) for phased
+> deployment workflows instead. `deploy.ps1` is retained only for backward
+> compatibility with projects that predate `azure.yaml` adoption.
 
 | Phase      | Resources                             | Gate          |
 | ---------- | ------------------------------------- | ------------- |
@@ -75,28 +86,34 @@ Deploy everything in one operation. Still requires user approval.
 
 ### Decision: azd vs deploy.ps1
 
-| Factor                 | azd                            | deploy.ps1                  |
-| ---------------------- | ------------------------------ | --------------------------- |
-| Cross-platform         | Yes                            | PowerShell only             |
-| Environment management | Built-in (`azd env`)           | Manual parameters           |
-| Hooks (pre/post)       | `azure.yaml` hooks             | Custom script logic         |
-| Phased deployment      | Single provision               | Fine-grained phases         |
-| New projects           | **Use azd**                    | Not generated               |
-| Existing projects      | Use azd if `azure.yaml` exists | Fallback if no `azure.yaml` |
+> **Full guide**: [azd-vs-deploy-guide.md](references/azd-vs-deploy-guide.md) — comparison,
+> per-project conventions, workflow, hooks, troubleshooting.
+
+| Factor                 | azd                                                         | deploy.ps1                                      |
+| ---------------------- | ----------------------------------------------------------- | ----------------------------------------------- |
+| Cross-platform         | Yes                                                         | PowerShell only                                 |
+| Environment management | Built-in (`azd env`)                                        | Manual parameters                               |
+| Hooks (pre/post)       | `azure.yaml` hooks                                          | Custom script logic                             |
+| Phased deployment      | Use hooks (`preprovision`/`postprovision`)                  | Fine-grained phases *(deprecated)*              |
+| New projects           | **Use azd**                                                 | **Deprecated — do not use for new projects** |
+| Existing projects      | Use azd (generate `azure.yaml` if missing)                  | Deprecated fallback if no `azure.yaml`          |
+| Project isolation      | Per-project: `infra/{iac}/{project}/azure.yaml` + `.azure/` | Per-project: `infra/{iac}/{project}/deploy.ps1` |
+| Env naming             | `{project}-{env}` (e.g., `hub-spoke-dev`)                   | Manual parameter per invocation                 |
 
 ---
 
 ## Reference Index
 
-| Reference                     | Location                                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Preflight validation          | `azure-validate/references/infraops-preflight.md`                                                        |
-| CLI auth validation procedure | `azure-defaults/references/azure-cli-auth-validation.md`                                                 |
-| Policy effect decision tree   | `azure-defaults/references/policy-effect-decision-tree.md`                                               |
-| IaC policy compliance         | `.github/instructions/iac-bicep-best-practices.instructions.md` / `iac-terraform-best-practices.instructions.md` |
-| Bootstrap backend templates   | `terraform-patterns/references/bootstrap-backend-template.md`                                            |
-| Deploy script templates       | `terraform-patterns/references/deploy-script-template.md`                                                |
-| Circuit breaker               | `references/circuit-breaker.md`                                                                          |
+| Reference                     | Location                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **azd vs deploy.ps1 guide**   | `references/azd-vs-deploy-guide.md`                                                                                                   |
+| Preflight validation          | `azure-validate/references/infraops-preflight.md`                                                                                     |
+| CLI auth validation procedure | `azure-defaults/references/azure-cli-auth-validation.md`                                                                              |
+| Policy effect decision tree   | `azure-defaults/references/policy-effect-decision-tree.md`                                                                            |
+| IaC policy compliance         | `.github/instructions/iac-bicep-best-practices.instructions.md` / `.github/instructions/iac-terraform-best-practices.instructions.md` |
+| Bootstrap backend templates   | `terraform-patterns/references/bootstrap-backend-template.md`                                                                         |
+| Deploy script templates       | `terraform-patterns/references/deploy-script-template.md`                                                                             |
+| Circuit breaker               | `references/circuit-breaker.md`                                                                                                       |
 
 ## Circuit Breaker
 
