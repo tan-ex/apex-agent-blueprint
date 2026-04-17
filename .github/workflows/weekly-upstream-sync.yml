@@ -76,7 +76,7 @@ jobs:
     steps:
       - name: Checkout repository
         # Pinned by SHA for supply-chain hardening; Dependabot keeps this updated. (v5.0.1)
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
