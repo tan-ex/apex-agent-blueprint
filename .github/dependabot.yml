@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Keep GitHub Actions (including SHA-pinned versions) up to date.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - automation
+      - dependencies
