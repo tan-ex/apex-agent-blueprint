@@ -65,9 +65,10 @@
     },
     "governance": {
       "agent": ".github/agents/04g-governance.agent.md",
-      "model": "GPT-5.4",
+      "model": "Claude Sonnet 4.6",
       "skills": [
         "azure-defaults",
+        "azure-governance-discovery",
         "azure-artifacts",
         "session-resume",
         "microsoft-docs"
@@ -185,7 +186,7 @@
     },
     "challenger": {
       "agent": ".github/agents/10-challenger.agent.md",
-      "model": "GPT-5.4",
+      "model": "Claude Sonnet 4.6",
       "skills": [],
       "invokable": true,
       "step": null
@@ -213,19 +214,13 @@
   "subagents": {
     "challenger-review-subagent": {
       "agent": ".github/agents/_subagents/challenger-review-subagent.agent.md",
-      "model": "GPT-5.4",
+      "model": "Claude Sonnet 4.6",
       "skills": [],
       "invokable": false
     },
     "cost-estimate-subagent": {
       "agent": ".github/agents/_subagents/cost-estimate-subagent.agent.md",
       "model": "GPT-5.3-Codex",
-      "skills": ["azure-defaults"],
-      "invokable": false
-    },
-    "governance-discovery-subagent": {
-      "agent": ".github/agents/_subagents/governance-discovery-subagent.agent.md",
-      "model": "GPT-5.4",
       "skills": ["azure-defaults"],
       "invokable": false
     },

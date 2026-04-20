@@ -55,15 +55,14 @@ See `.github/count-manifest.json` for canonical counts.
 
 ### Validation Subagents (in `_subagents/`)
 
-| Subagent                      | File                                     | Purpose                             |
-| ----------------------------- | ---------------------------------------- | ----------------------------------- |
-| bicep-validate-subagent       | `bicep-validate-subagent.agent.md`       | Lint + AVM/security code review     |
-| bicep-whatif-subagent         | `bicep-whatif-subagent.agent.md`         | Deployment preview (what-if)        |
-| challenger-review-subagent    | `challenger-review-subagent.agent.md`    | Adversarial artifact review         |
-| cost-estimate-subagent        | `cost-estimate-subagent.agent.md`        | Azure Pricing MCP queries           |
-| governance-discovery-subagent | `governance-discovery-subagent.agent.md` | Azure Policy REST API discovery     |
-| terraform-plan-subagent       | `terraform-plan-subagent.agent.md`       | Deployment preview (terraform plan) |
-| terraform-validate-subagent   | `terraform-validate-subagent.agent.md`   | Lint + AVM-TF/security code review  |
+| Subagent                    | File                                   | Purpose                             |
+| --------------------------- | -------------------------------------- | ----------------------------------- |
+| bicep-validate-subagent     | `bicep-validate-subagent.agent.md`     | Lint + AVM/security code review     |
+| bicep-whatif-subagent       | `bicep-whatif-subagent.agent.md`       | Deployment preview (what-if)        |
+| challenger-review-subagent  | `challenger-review-subagent.agent.md`  | Adversarial artifact review         |
+| cost-estimate-subagent      | `cost-estimate-subagent.agent.md`      | Azure Pricing MCP queries           |
+| terraform-plan-subagent     | `terraform-plan-subagent.agent.md`     | Deployment preview (terraform plan) |
+| terraform-validate-subagent | `terraform-validate-subagent.agent.md` | Lint + AVM-TF/security code review  |
 
 ### Shared Knowledge (via Skills)
 
@@ -161,7 +160,6 @@ See `.github/count-manifest.json` for canonical counts.
 | Instruction                                    | Applies To (glob)                                               |
 | ---------------------------------------------- | --------------------------------------------------------------- |
 | `agent-authoring.instructions.md`              | `**/*.agent.md, **/*.prompt.md`                                 |
-| `agent-research-first.instructions.md`         | `**/*.agent.md`                                                 |
 | `agent-skills.instructions.md`                 | `**/.github/skills/**/SKILL.md`                                 |
 | `astro.instructions.md`                        | `site/**/*.astro, site/**/*.ts, site/**/*.mdx, site/**/*.md`    |
 | `azure-artifacts.instructions.md`              | `**/agent-output/**/*.md`                                       |
