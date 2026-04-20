@@ -62,7 +62,7 @@ handoffs:
     send: false
   - label: "Step 3.5: Governance Discovery"
     agent: 04g-Governance
-    prompt: "Discover Azure Policy constraints for `agent-output/{project}/`. Query REST API (including management-group inherited policies), produce 04-governance-constraints.md/.json, and run adversarial review. Input: `02-architecture-assessment.md` resource list. Output: governance constraint artifacts for IaC planning."
+    prompt: "Discover Azure Policy constraints for `agent-output/{project}/`. Query REST API (including management-group inherited policies), produce 04-governance-constraints.md/.json, and run adversarial review. Input: `02-architecture-assessment.md` resource list. Output: governance constraint artifacts for IaC planning. **INVOCATION: switch agent mode (handoff) — do NOT wrap this in `#runSubagent`.** Subagent dispatch re-boots discovery context cold (+15 min overhead from duplicated skill/instruction loading, cache miss on `tmp/{project}-governance-live.json`, and nested challenger re-entry). The governance agent is designed to run as a peer with shared session state."
     send: true
   - label: "Step 4: Implementation Plan"
     agent: 05-IaC Planner
@@ -200,6 +200,39 @@ Instead of hardcoded step logic, read `workflow-graph.json` from the workflow-en
 
 All steps default to **1-pass comprehensive adversarial review**. Multi-pass rotating
 lens reviews are **opt-in**, recommended only for complex projects.
+
+### Computing `decisions.complexity`
+
+At **Gate-1** (after Requirements approval) and refreshed at **Gate-2_5** (after
+Governance), derive `decisions.complexity` using the canonical formula in
+`.github/skills/workflow-engine/templates/workflow-graph.json`
+(`metadata.complexity_routing`). Do not re-invent the formula — read it from the
+graph.
+
+```text
+score = (resource_count / 3)
+      + (policy_violations / 2)
+      + (iac_tool == "terraform" ? 0.5 : 0)
+
+score <= 1.5  -> complexity = "simple"   (1 review pass)
+score <= 3.0  -> complexity = "standard" (2 review passes)
+score  > 3.0  -> complexity = "complex"  (3 review passes)
+```
+
+Inputs:
+
+| Input                | Source                                                |
+| -------------------- | ----------------------------------------------------- |
+| `resource_count`     | Count declared in `02-architecture-assessment.md`     |
+| `policy_violations`  | Count of `deny`-effect findings in `04-governance-constraints.json` |
+| `iac_tool`           | `decisions.iac_tool` (bicep or terraform)             |
+
+Persist the result at `decisions.complexity` in `00-session-state.json` so every
+agent reads the same value instead of re-deriving. If `04-governance-constraints.json`
+is not yet generated (pre-Gate-2_5), set `policy_violations = 0` and refresh the
+score after governance approval.
+
+### Gate behaviour
 
 At each approval gate:
 
@@ -358,7 +391,7 @@ Input state: 00-session-state.json shows steps.2.status = "complete", decisions.
 Decision logic:
   1. Step 2 complete → check if Step 3 (Design) should run → user said "skip design"
   2. Follow on_skip edge → next node = Step 3.5 (Governance)
-  3. Governance agent is GPT-5.4 → delegate via handoff
+  3. Governance agent is Claude Sonnet 4.6 → delegate via handoff
 Output: Present Gate 2 with session break recommendation, then hand off to 04g-Governance
   with prompt including project name and architecture artifact path.
 </example>
