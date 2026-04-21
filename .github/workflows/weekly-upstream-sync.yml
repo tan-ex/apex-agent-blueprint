@@ -5,10 +5,13 @@
 # ALWAYS synced from upstream (upstream wins):
 #   .devcontainer/          .vscode/               .github/agents/
 #   .github/skills/         .github/instructions/  .github/prompts/
-#   .github/data/                                .github/copilot-instructions.md
-#   .github/CODEOWNERS      .github/ISSUE_TEMPLATE/ .github/PULL_REQUEST_TEMPLATE.md
-#   docs/exec-plans/        scripts/               mcp/azure-pricing-mcp/
-#   package.json            lefthook.yml           commitlint.config.js
+#   .github/hooks/          .github/plugins/       .github/data/
+#   .github/copilot-instructions.md                .github/dependabot.yml
+#   .github/agent-registry.json                    .github/skill-affinity.json
+#   .github/count-manifest.json                    .github/terminology-blocklist.json
+#   schemas/                assets/                scripts/
+#   tests/                  mcp/                   package.json
+#   lefthook.yml            commitlint.config.js
 #   *.json/.yml/.toml/.txt (root config files)
 #
 # NEVER synced (accelerator-specific, excluded):
@@ -16,11 +19,16 @@
 #   infra/bicep/            → user project Bicep templates
 #   infra/terraform/        → user project Terraform configs
 #   .github/workflows/      → keep repository workflows as-is (GITHUB_TOKEN cannot push workflow changes)
+#   .github/ISSUE_TEMPLATE/ → accelerator-specific issue templates
+#   .github/PULL_REQUEST_TEMPLATE.md → accelerator-specific PR template
+#   .github/CODEOWNERS      → accelerator-specific code owners
 #   README.md               → accelerator-specific README
 #   CONTRIBUTING.md         → accelerator-specific contribution guide
+#   CONTRIBUTORS.md         → accelerator-specific contributors list
 #   CHANGELOG.md            → accelerator-specific changelog
 #   site/                   → accelerator-specific documentation site
-#   docs/ (except exec-plans/) → accelerator-specific docs (docs/exec-plans/ IS synced)
+#   docs/                   → accelerator-specific docs
+#   logs/                   → local development/debug logs
 #
 # To sync workflow files from upstream, run locally: npm run sync:workflows
 #
@@ -55,17 +63,21 @@ env:
   SYNC_BRANCH: automation/upstream-sync
   # Single source of truth for excluded paths. Consumed by the sync step and the leak-check step.
   # Trailing slash for directories, no trailing slash for files. One path per line.
-  # Note: docs/ is excluded here wholesale; docs/exec-plans/ is re-applied from upstream after the exclusion loop.
   EXCLUDE_PATHS: |
     .github/workflows/
+    .github/ISSUE_TEMPLATE/
+    .github/PULL_REQUEST_TEMPLATE.md
+    .github/CODEOWNERS
     agent-output/
     infra/bicep/
     infra/terraform/
     README.md
     CONTRIBUTING.md
+    CONTRIBUTORS.md
     CHANGELOG.md
     site/
     docs/
+    logs/
 
 jobs:
   sync:
@@ -112,7 +124,6 @@ jobs:
           git checkout "upstream/${UPSTREAM_REF}" -- .
 
           # Restore each excluded path from the base branch.
-          # docs/ is a special case: excluded wholesale here, then docs/exec-plans/ is re-synced from upstream below.
           for path in "${EXCLUDES[@]}"; do
             git rm -r --cached --ignore-unmatch -- "$path" > /dev/null 2>&1 || true
             rm -rf -- "$path" 2>/dev/null || true
@@ -120,11 +131,6 @@ jobs:
               git checkout "${BASE_SHA}" -- "$path"
             fi
           done
-
-          # Re-apply upstream docs/exec-plans/ (upstream wins for this subfolder only)
-          if git ls-tree --name-only "upstream/${UPSTREAM_REF}" -- docs/exec-plans/ | grep -q .; then
-            git checkout "upstream/${UPSTREAM_REF}" -- docs/exec-plans/
-          fi
 
           # Stage everything and use a single cached diff for change detection.
           git add -A
@@ -164,11 +170,7 @@ jobs:
       - name: Assert excluded paths are unchanged
         if: steps.sync.outputs.changed == 'true'
         run: |
-          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|agent-output/|infra/bicep/|infra/terraform/|README\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|site/)' || true)
-          # Check docs/ changes, but allow docs/exec-plans/ through
-          docs_leaked=$(git diff --cached --name-only | grep -E '^docs/' | grep -v '^docs/exec-plans/' || true)
-          leaked="${leaked}${leaked:+$'\n'}${docs_leaked}"
-          leaked=$(echo "$leaked" | sed '/^$/d')
+          leaked=$(git diff --cached --name-only | grep -E '^(\.github/workflows/|\.github/ISSUE_TEMPLATE/|\.github/PULL_REQUEST_TEMPLATE\.md$|\.github/CODEOWNERS$|agent-output/|infra/bicep/|infra/terraform/|README\.md$|CONTRIBUTING\.md$|CONTRIBUTORS\.md$|CHANGELOG\.md$|site/|docs/|logs/)' || true)
           if [ -n "$leaked" ]; then
             echo "::error::Excluded paths were modified by sync."
             echo "$leaked" | sed 's/^/  /'
@@ -212,7 +214,7 @@ jobs:
           git commit -m "chore(sync): upstream sync from ${UPSTREAM_REPO}@${UPSTREAM_REF}
 
           Synced at $(date -u +"%Y-%m-%d %H:%M UTC")
-          Excluded: agent-output/ infra/bicep/ infra/terraform/ .github/workflows/ README.md CONTRIBUTING.md CHANGELOG.md site/ docs/ (except docs/exec-plans/)"
+          Excluded: agent-output/ infra/ .github/workflows/ .github/ISSUE_TEMPLATE/ .github/PULL_REQUEST_TEMPLATE.md .github/CODEOWNERS README.md CONTRIBUTING.md CONTRIBUTORS.md CHANGELOG.md site/ docs/ logs/"
 
           set +e
           push_output=$(git push --force origin "${SYNC_BRANCH}" 2>&1)
@@ -248,12 +250,15 @@ jobs:
           Triggered by: \`${{ github.event_name }}\`
 
           **Always synced from upstream:**
-          \`.devcontainer/\` · \`.vscode/\` · \`.github/agents/\` · \`.github/skills/\` · \`.github/instructions/\`
-          \`.github/prompts/\` · \`.github/data/\` · \`.github/copilot-instructions.md\`
-          \`docs/exec-plans/\` · \`scripts/\` · \`mcp/azure-pricing-mcp/\` · all root config files
+          \`.devcontainer/\` · \`.vscode/\` · \`mcp/\` · \`schemas/\` · \`assets/\` · \`scripts/\` · \`tests/\`
+          \`.github/agents/\` · \`.github/skills/\` · \`.github/instructions/\` · \`.github/prompts/\`
+          \`.github/hooks/\` · \`.github/plugins/\` · \`.github/data/\` · \`.github/copilot-instructions.md\`
+          All root config files (\`package.json\`, \`lefthook.yml\`, etc.)
 
           **Excluded (accelerator-specific, never overwritten):**
-          \`agent-output/\` · \`infra/bicep/\` · \`infra/terraform/\` · \`.github/workflows/\` · \`README.md\` · \`CONTRIBUTING.md\` · \`CHANGELOG.md\` · \`site/\` · \`docs/\` (except \`docs/exec-plans/\`)
+          \`agent-output/\` · \`infra/\` · \`.github/workflows/\` · \`.github/ISSUE_TEMPLATE/\` · \`.github/PULL_REQUEST_TEMPLATE.md\`
+          \`.github/CODEOWNERS\` · \`README.md\` · \`CONTRIBUTING.md\` · \`CONTRIBUTORS.md\` · \`CHANGELOG.md\`
+          \`site/\` · \`docs/\` · \`logs/\`
 
           > Policy: always manual review, no auto-merge."
 
