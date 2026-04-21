@@ -14,7 +14,8 @@
  * Edges:
  *  - agent → subagent (frontmatter `agents:` field)
  *  - agent handoff → agent (frontmatter `handoffs[].agent`)
- *  - agent → skill (from `.github/skill-affinity.json`, tiered)
+ *  - agent → skill (from `.github/agent-registry.json` skills array)
+ *  - agent ⇢ skill (from `.github/agent-registry.json` capability_skills array, kind="capability")
  *  - prompt → agent (slug match, e.g. `02-requirements` → `02-Requirements`)
  *  - instruction → agent/skill/prompt (via `applyTo` glob + name match)
  *  - workflow → validator (parse YAML for `npm run …`, expanding composite scripts)
@@ -320,7 +321,7 @@ function extractHandoffAgents(content) {
   return [...agents];
 }
 
-function buildEdges(nodes, skillAffinity) {
+function buildEdges(nodes) {
   const edges = [];
   const byLabel = new Map();
   const bySlug = new Map();
@@ -373,20 +374,49 @@ function buildEdges(nodes, skillAffinity) {
     }
   }
 
-  // Agent -> Skill (from skill-affinity.json)
-  const affinity = skillAffinity.agents || {};
-  for (const [agentLabel, tiers] of Object.entries(affinity)) {
-    const agentNode = findNode(agentLabel, "agent");
-    if (!agentNode) continue;
-    for (const tier of ["primary", "secondary"]) {
-      for (const skillName of tiers[tier] || []) {
+  // Agent -> Skill (from agent-registry.json)
+  let registry = { agents: {}, subagents: {} };
+  try {
+    registry = readJson(join(REPO_ROOT, ".github/agent-registry.json"));
+  } catch {
+    // optional
+  }
+  const registryAgents = registry.agents || {};
+  const registrySubagents = registry.subagents || {};
+  const allRegistryEntries = { ...registryAgents, ...registrySubagents };
+  for (const [roleSlug, entry] of Object.entries(allRegistryEntries)) {
+    // Handle nested entries (iac-code.bicep, deploy.terraform)
+    const subEntries = entry.skills
+      ? [entry]
+      : Object.values(entry).filter(
+          (v) => v && typeof v === "object" && v.skills,
+        );
+    for (const sub of subEntries) {
+      const agentPath = sub.agent;
+      if (!agentPath) continue;
+      const agentName = basename(agentPath, ".agent.md");
+      const agentNode =
+        findNode(agentName, "agent") || findNode(agentName, "subagent");
+      if (!agentNode) continue;
+      for (const skillName of sub.skills || []) {
         const skillNode = findNode(skillName, "skill");
         if (skillNode) {
           edges.push({
-            id: `${agentNode.id}--uses-${tier}->${skillNode.id}`,
+            id: `${agentNode.id}--uses->${skillNode.id}`,
             source: agentNode.id,
             target: skillNode.id,
-            kind: tier === "primary" ? "uses-primary" : "uses-secondary",
+            kind: "uses",
+          });
+        }
+      }
+      for (const skillName of sub.capability_skills || []) {
+        const skillNode = findNode(skillName, "skill");
+        if (skillNode) {
+          edges.push({
+            id: `${agentNode.id}--capability->${skillNode.id}`,
+            source: agentNode.id,
+            target: skillNode.id,
+            kind: "capability",
           });
         }
       }
@@ -589,14 +619,7 @@ function main() {
     ...mcp,
   ];
 
-  let skillAffinity = { agents: {} };
-  try {
-    skillAffinity = readJson(join(REPO_ROOT, ".github/skill-affinity.json"));
-  } catch {
-    // optional
-  }
-
-  const edges = buildEdges(nodes, skillAffinity);
+  const edges = buildEdges(nodes);
 
   // Mark orphans (nodes with no edges) and assign them to a category-level
   // compound parent node. This lets the explorer collapse the disconnected
@@ -640,7 +663,7 @@ function main() {
 
   const generatedAt = new Date().toISOString();
   const graph = {
-    $schema: "architecture-explorer-graph-v1",
+    $schema: "../schemas/explorer-graph.schema.json",
     generatedAt,
     categories,
     nodeCount: nodes.length,
