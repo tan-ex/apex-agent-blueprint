@@ -7,10 +7,8 @@
 #   .github/skills/         .github/instructions/  .github/prompts/
 #   .github/hooks/          .github/plugins/       .github/data/
 #   .github/copilot-instructions.md                .github/dependabot.yml
-#   .github/agent-registry.json                    .github/skill-affinity.json
-#   .github/count-manifest.json                    .github/terminology-blocklist.json
-#   schemas/                assets/                scripts/
-#   tests/                  mcp/                   package.json
+#   .github/terminology-blocklist.json
+#   tools/                  assets/                package.json
 #   lefthook.yml            commitlint.config.js
 #   *.json/.yml/.toml/.txt (root config files)
 #
@@ -250,7 +248,7 @@ jobs:
           Triggered by: \`${{ github.event_name }}\`
 
           **Always synced from upstream:**
-          \`.devcontainer/\` · \`.vscode/\` · \`mcp/\` · \`schemas/\` · \`assets/\` · \`scripts/\` · \`tests/\`
+          \`.devcontainer/\` · \`.vscode/\` · \`tools/\` · \`assets/\`
           \`.github/agents/\` · \`.github/skills/\` · \`.github/instructions/\` · \`.github/prompts/\`
           \`.github/hooks/\` · \`.github/plugins/\` · \`.github/data/\` · \`.github/copilot-instructions.md\`
           All root config files (\`package.json\`, \`lefthook.yml\`, etc.)
