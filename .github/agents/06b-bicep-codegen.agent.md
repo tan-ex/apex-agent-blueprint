@@ -201,6 +201,8 @@ For EACH resource in `04-implementation-plan.md`:
      The `askQuestions` tool presents an inline form the user fills out in one shot.
      If the user chooses to abort, STOP and present the Return to Step 4 handoff.
 
+**Checkpoint** (MANDATORY): `apex-recall checkpoint <project> 5 phase_1_preflight --json`
+
 ### Phase 1.5: Governance Compliance Mapping (MANDATORY)
 
 **HARD GATE**. Do NOT proceed to Phase 2 with unresolved policy violations.
@@ -245,8 +247,8 @@ Compact the conversation before proceeding to code generation.
    `SKILL.minimal.md` variants (see `context-shredding` skill, >80% tier)
 3. **Do NOT re-read predecessor artifacts** — rely on the summary above
    and the saved `04-preflight-check.md` + `04-governance-constraints.json` on disk
-4. **Update session state** — write `sub_step: "phase_1.6_compacted"` to
-   `00-session-state.json` so resume skips re-loading prior context
+4. **Update session state** — run `apex-recall checkpoint <project> 5 phase_1.6_compacted --json`
+   so resume skips re-loading prior context
 
 ### Phase 2: Progressive Implementation
 
@@ -294,7 +296,7 @@ violations are a hard gate (fix before Phase 4.5).
 ### Phase 4.5: Adversarial Code Review (1–3 passes, complexity-based)
 
 Read `azure-defaults/references/adversarial-review-protocol.md` for lens table and invocation template.
-Check `00-session-state.json` `decisions.complexity` to determine pass count per the review matrix in `adversarial-review-protocol.md`.
+Check `decisions.complexity` from `apex-recall show <project> --json` to determine pass count per the review matrix in `adversarial-review-protocol.md`.
 
 **Complexity routing**:
 
@@ -315,7 +317,11 @@ skip pass 2 if pass 1 has 0 `must_fix` and <2 `should_fix`;
 skip pass 3 if pass 2 has 0 `must_fix`.
 Write results to `challenge-findings-iac-code-pass{N}.json`. Fix any `must_fix` items, re-validate, re-run failing pass.
 
+**Review audit** (MANDATORY): `apex-recall review-audit <project> 5 --passes-executed <N> --json`
+
 Save validation status in `05-implementation-reference.md`. Run `npm run lint:artifact-templates`.
+
+**On completion** (MANDATORY): `apex-recall complete-step <project> 5 --json`
 
 ## File Structure
 
