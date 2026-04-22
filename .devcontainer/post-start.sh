@@ -45,7 +45,7 @@ else
 fi
 
 # ─── Azure Pricing MCP ───────────────────────────────────────────────────────
-MCP_DIR="${WORKSPACE_FOLDER:-$PWD}/mcp/azure-pricing-mcp"
+MCP_DIR="${WORKSPACE_FOLDER:-$PWD}/tools/mcp-servers/azure-pricing"
 if [ -f "$MCP_DIR/.venv/bin/pip" ]; then
     "$MCP_DIR/.venv/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
     printf "    azure-pricing-mcp     "
@@ -81,6 +81,15 @@ if [ -x "$UV_BIN" ]; then
         || printf "⚠️  update failed (continuing)\n"
 else
     printf "    python packages      ⚠️  uv not found — skipping\n"
+fi
+
+# ─── apex-recall CLI ─────────────────────────────────────────────────────────
+APEX_RECALL_DIR="${WORKSPACE_FOLDER:-$PWD}/tools/apex-recall"
+if [ -d "$APEX_RECALL_DIR" ] && [ -x "$UV_BIN" ]; then
+    printf "    apex-recall          "
+    "$UV_BIN" pip install --system --quiet --upgrade -e "$APEX_RECALL_DIR" 2>&1 \
+        && printf "✅ updated\n" \
+        || printf "⚠️  update failed (continuing)\n"
 fi
 
 ELAPSED=$(( $(date +%s) - START ))

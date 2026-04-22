@@ -100,9 +100,8 @@ Read `.github/agents/e2e-orchestrator.agent.md` for detailed procedures:
 
 Also read these skills before executing any step:
 
-1. `.github/skills/session-resume/SKILL.digest.md` — session state schema
-2. `.github/skills/azure-defaults/SKILL.digest.md` — regions, tags, naming
-3. `.github/skills/azure-artifacts/SKILL.digest.md` — artifact structure
+1. `.github/skills/azure-defaults/SKILL.digest.md` — regions, tags, naming
+2. `.github/skills/azure-artifacts/SKILL.digest.md` — artifact structure
 
 ## Run Configuration
 
@@ -342,10 +341,10 @@ continue without waiting for the user:
 
 ### Step 8: Benchmark and Lessons
 
-- Run `node scripts/validate-e2e-step.mjs --project={project} all`.
+- Run `node tools/scripts/validate-e2e-step.mjs --project={project} all`.
 - Run `npm run validate:all` and report unrelated baseline failures separately
   from run-specific failures.
-- Run `node scripts/benchmark-e2e.mjs {project}`.
+- Run `node tools/scripts/benchmark-e2e.mjs {project}`.
 - Generate both `09-lessons-learned.json` and `09-lessons-learned.md`.
 
 ## Validation and Review Expectations

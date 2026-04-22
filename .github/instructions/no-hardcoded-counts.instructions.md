@@ -1,6 +1,6 @@
 ---
 description: "Prevents hard-coded numeric counts for project entities (agents, skills, instructions, validators). Enforces descriptive language and count-manifest.json as single source of truth."
-applyTo: ".github/**/*.{md,json}, scripts/**/*.mjs, site/src/content/docs/**/*.{md,mdx}, AGENTS.md, README.md, CHANGELOG.md, QUALITY_SCORE.md, VERSION.md"
+applyTo: ".github/**/*.{md,json}, tools/scripts/**/*.mjs, site/src/content/docs/**/*.{md,mdx}, AGENTS.md, README.md, CHANGELOG.md, QUALITY_SCORE.md, VERSION.md"
 ---
 
 # No Hard-Coded Counts
@@ -29,12 +29,12 @@ Use **descriptive language** that stays true regardless of count changes:
 
 ## When Exact Counts ARE Needed
 
-Reference `.github/count-manifest.json` as the single source of truth. Validators
+Reference `tools/registry/count-manifest.json` as the single source of truth. Validators
 auto-compute actual values from filesystem globs defined in that file.
 
 Files **allowed** to contain counts (the allowlist):
 
-- `.github/count-manifest.json` — the manifest itself
+- `tools/registry/count-manifest.json` — the manifest itself
 - `CHANGELOG.md` — historical entries describe what changed at a point in time
 - `QUALITY_SCORE.md` Change Log column — historical records of state changes
 - Validator script output — computed dynamically, not hard-coded
