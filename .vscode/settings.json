@@ -21,8 +21,8 @@
   "chat.useAgentSkills": true,
   "json.schemas": [
     {
-      "fileMatch": [".github/agent-registry.json"],
-      "url": "./schemas/agent-registry.schema.json"
+      "fileMatch": ["tools/registry/agent-registry.json"],
+      "url": "./tools/schemas/agent-registry.schema.json"
     }
   ],
   "editor.formatOnSave": true,
@@ -55,7 +55,7 @@
   "python.terminal.useEnvFile": true,
   "azureTerraform.checkTerraformCmd": false,
   "deno.enable": false,
-  "deno.enablePaths": ["mcp/drawio-mcp-server"],
+  "deno.enablePaths": ["tools/mcp-servers/drawio"],
   "deno.lint": true,
   "deno.unstable": []
 }

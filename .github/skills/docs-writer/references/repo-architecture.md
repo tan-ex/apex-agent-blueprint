@@ -23,14 +23,21 @@ azure-agentic-infraops/  (APEX)
 ├── tests/                   # Test checklists and exec plans
 │   └── exec-plans/          # Execution plans and tech debt tracker
 ├── infra/bicep/             # Bicep module library
-├── mcp/azure-pricing-mcp/   # Azure Pricing MCP server
+├── tools/
+│   ├── apex-recall/        # Progressive session recall CLI
+│   ├── mcp-servers/
+│   │   ├── azure-pricing/  # Azure Pricing MCP server
+│   │   └── drawio/         # Draw.io MCP server
+│   ├── registry/           # Agent registry + count manifest
+│   ├── schemas/            # JSON schemas
+│   └── scripts/            # Validation and maintenance scripts
 ├── scripts/                 # Validation and automation scripts
 └── temp/                    # Scratch space (gitignored for outputs)
 ```
 
 ## Agent Inventory
 
-See `.github/count-manifest.json` for canonical counts.
+See `tools/registry/count-manifest.json` for canonical counts.
 
 ### Primary Agents
 
@@ -75,7 +82,7 @@ All shared context previously in `_shared/` is now consolidated into skills:
 
 ## Skill Catalog
 
-See `.github/count-manifest.json` for canonical skill counts.
+See `tools/registry/count-manifest.json` for canonical skill counts.
 Each subdirectory under `.github/skills/` with a `SKILL.md` is one skill.
 
 | Skill                         | Folder                         | Category            | Triggers                                  |
@@ -120,7 +127,6 @@ Each subdirectory under `.github/skills/` with a `SKILL.md` is one skill.
 | `microsoft-docs`              | `microsoft-docs/`              | Documentation       | "Azure docs", "quickstart"                |
 | `microsoft-foundry`           | `microsoft-foundry/`           | AI Platform         | "Foundry agent", "deploy agent"           |
 | `microsoft-skill-creator`     | `microsoft-skill-creator/`     | Meta                | "create skill for Microsoft tech"         |
-| `session-resume`              | `session-resume/`              | Workflow            | "resume session", "checkpoint"            |
 | `terraform-patterns`          | `terraform-patterns/`          | IaC Patterns        | "terraform pattern", "AVM-TF", "HCL"      |
 | `terraform-search-import`     | `terraform-search-import/`     | IaC Import          | "import resources", "terraform import"    |
 | `terraform-test`              | `terraform-test/`              | IaC Testing         | "terraform test", ".tftest.hcl"           |
@@ -129,7 +135,7 @@ Each subdirectory under `.github/skills/` with a `SKILL.md` is one skill.
 ## Template Inventory
 
 All in `.github/skills/azure-artifacts/templates/`. Naming: `{step}-{name}.template.md`.
-See `.github/count-manifest.json` for canonical counts.
+See `tools/registry/count-manifest.json` for canonical counts.
 
 | Template                                  | Artifact             | Validation        |
 | ----------------------------------------- | -------------------- | ----------------- |
@@ -154,7 +160,7 @@ See `.github/count-manifest.json` for canonical counts.
 
 ## Instruction File Map
 
-See `.github/count-manifest.json` for canonical counts.
+See `tools/registry/count-manifest.json` for canonical counts.
 
 | Instruction                                    | Applies To (glob)                                               |
 | ---------------------------------------------- | --------------------------------------------------------------- |
