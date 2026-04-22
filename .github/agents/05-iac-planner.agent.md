@@ -75,7 +75,7 @@ Deny-policy blockers before designing the module structure.
 Primary artifact: agent-output/{project}/04-implementation-plan.md — YAML-structured resource
 specs, module inventory, deployment phases, dependency order. H2 structure from template.
 Diagrams: 04-dependency-diagram.py/.png and 04-runtime-diagram.py/.png (Python diagrams library).
-Session state: update 00-session-state.json after each phase with sub_step checkpoint.
+Session state: managed via `apex-recall` CLI — checkpoint after each phase.
 </output_contract>
 
 <scope_fencing>
@@ -166,6 +166,8 @@ Run `apex-recall show <project> --json` for full project context. Do not read `0
 3. Extract all `Deny` policies — these are hard blockers for the plan
 4. Extract `Modify`/`DeployIfNotExists` policies — note auto-remediation behavior
 
+**Checkpoint** (MANDATORY): `apex-recall checkpoint <project> 4 phase_1_prereqs --json`
+
 **Policy effects:** Read `azure-defaults/references/policy-effect-decision-tree.md`.
 
 ### Phase 1.5: Deployment Context Discovery
@@ -220,6 +222,10 @@ Use `askQuestions` to present:
 If phased, ask grouping: **Standard** (Foundation → Security → Data → Compute → Edge) or **Custom**.
 Record choice for `## Deployment Phases` section.
 
+**Decisions** (MANDATORY):
+`apex-recall decide <project> --decision "Deployment strategy: <phased|single>" --rationale "<why>" --step 4 --json`
+**Checkpoint** (MANDATORY): `apex-recall checkpoint <project> 4 phase_3.5_strategy --json`
+
 **Terraform-specific**: Phased deployment uses `var.deployment_phase` + `count` conditionals
 (not `terraform -target`).
 
@@ -237,8 +243,8 @@ Context usage reaches ~80% by the end of the deployment strategy gate.
    `SKILL.minimal.md` variants (see `context-shredding` skill, >80% tier)
 3. **Do NOT re-read predecessor artifacts** — rely on the summary above
    and the saved files on disk (`04-governance-constraints.md/json`)
-4. **Update session state** — write `sub_step: "phase_3.6_compacted"` to
-   `00-session-state.json` so resume skips re-loading prior context
+4. **Update session state** — run `apex-recall checkpoint <project> 4 phase_3.6_compacted --json`
+   so resume skips re-loading prior context
 
 ### Phase 4: Implementation Plan Generation
 
@@ -263,7 +269,8 @@ For patterns, read `terraform-patterns/references/tf-best-practices-examples.md`
 
 Read `azure-defaults/references/adversarial-review-protocol.md` for lens table,
 prior_findings format, and invocation template.
-Check `00-session-state.json` `decisions.complexity` to determine pass count
+Check `decisions.complexity` from `apex-recall show <project> --json`
+to determine pass count
 per the review matrix in `adversarial-review-protocol.md`.
 
 > **Governance review is NOT needed here** — it was already done in Step 3.5.
@@ -277,6 +284,8 @@ skip pass 2 if pass 1 has 0 `must_fix` and <2 `should_fix`.
 Pass 2 → `challenger-review-subagent` with `review_focus = "architecture-reliability"`.
 
 Write results to `agent-output/{project}/challenge-findings-plan-pass{N}.json`.
+
+**Review audit** (MANDATORY): `apex-recall review-audit <project> 4 --passes-executed <N> --json`
 
 ### Phase 5: Approval Gate
 
@@ -302,6 +311,7 @@ Then use `askQuestions` to gather the decision:
   `04-implementation-plan.md`, re-run the challenger review, then repeat
 - If the user chooses to proceed: present final handoff to the appropriate
   CodeGen agent (Bicep or Terraform based on `decisions.iac_tool`)
+  **On completion** (MANDATORY): `apex-recall complete-step <project> 4 --json`
 
 ## Output Files
 

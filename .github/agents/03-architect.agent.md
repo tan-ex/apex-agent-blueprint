@@ -85,7 +85,7 @@ scores (1-10) with confidence, service maturity table, SKU recommendations, cost
 Cost artifact: agent-output/{project}/03-des-cost-estimate.md — every dollar figure from
 cost-estimate-subagent, not from parametric knowledge.
 Charts: 02-waf-scores.py/.png, 03-des-cost-distribution.py/.png, 03-des-cost-projection.py/.png.
-Session state: update 00-session-state.json after each phase.
+Session state: managed via `apex-recall` CLI — checkpoint after each phase.
 </output_contract>
 
 ## Prerequisites Check (BEFORE Reading Skills)
@@ -114,6 +114,8 @@ Run `apex-recall show <project> --json` for full project context. Do not read `0
   `phase_2.5_compacted` → `phase_3_cost` →
   `phase_4_challenger` → `phase_5_artifact`
 - **Checkpoints**: `apex-recall checkpoint <project> 2 <phase_name> --json`
+- **Decisions**: `apex-recall decide <project> --decision "<text>" --rationale "<why>" --step 2 --json`
+  Record: WAF pillar scores, SKU selections, architecture pattern choice, cost tier decisions.
 - **Review audit**: `apex-recall review-audit <project> 2 ... --json`
 - **On completion**: `apex-recall complete-step <project> 2 --json`
 
@@ -188,6 +190,7 @@ in your WAF assessment recommendations (still produce the identical artifact str
 5. **Checkpoint to disk** — Save research notes to `agent-output/{project}/02-waf-research.tmp.md`
    (scratch file, deleted after final artifact is generated). This prevents holding both
    research context AND final output in memory simultaneously.
+   **Checkpoint** (MANDATORY): `apex-recall checkpoint <project> 2 phase_2_waf --json`
 6. **Context compaction (MANDATORY)** — Context usage reaches ~80% after WAF research
    and doc lookups. Before pricing delegation, compact the conversation:
    - Write a single concise summary: WAF pillar scores, resource list with SKUs,
@@ -196,8 +199,11 @@ in your WAF assessment recommendations (still produce the identical artifact str
    - Do NOT re-read `01-requirements.md` or doc search results — rely on the
      summary and the saved `02-waf-research.tmp.md` on disk
    - Update session state: `sub_step: "phase_2.5_compacted"`
+   **Checkpoint** (MANDATORY): `apex-recall checkpoint <project> 2 phase_2.5_compacted --json`
 7. **Delegate pricing** — Send resource list to `cost-estimate-subagent`; receive verified prices
 8. **Generate assessment** — Save `02-architecture-assessment.md` with subagent-sourced prices
+   **Decisions** (MANDATORY): Record key architecture choices:
+   `apex-recall decide <project> --decision "<pattern/SKU/trade-off>" --rationale "<why>" --step 2 --json`
 9. **Generate cost estimate** — Save `03-des-cost-estimate.md` with subagent-sourced prices
 10. **Generate charts** — Read `.github/skills/python-diagrams/references/waf-cost-charts.md`
     and produce three matplotlib PNGs in `agent-output/{project}/`:
@@ -213,7 +219,9 @@ in your WAF assessment recommendations (still produce the identical artifact str
     for your artifacts
 12. **Pricing sanity check** — Verify no dollar figures in your artifacts were
     written from memory (grep for `$` and confirm each matches subagent output)
+    **Checkpoint** (MANDATORY): `apex-recall checkpoint <project> 2 phase_5_artifact --json`
 13. **Approval gate** — Present summary, wait for user approval before handoff
+    **On approval** (MANDATORY): `apex-recall complete-step <project> 2 --json`
 
 ## Cost Estimation
 
@@ -270,7 +278,7 @@ After generating the assessment and cost estimate, run adversarial reviews.
 Read `azure-defaults/references/adversarial-review-protocol.md` for the
 lens table, compact prior_findings guidance, and invocation template.
 
-Check `00-session-state.json` `decisions.complexity` to determine pass count per the review matrix in `adversarial-review-protocol.md`.
+Check `decisions.complexity` from `apex-recall show <project> --json` to determine pass count per the review matrix in `adversarial-review-protocol.md`.
 
 ### Architecture Review (3 passes — rotating lenses)
 
