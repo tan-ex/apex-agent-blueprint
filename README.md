@@ -78,6 +78,7 @@ After the dev container starts, run the initialization commands:
 
 ```bash
 npm install
+pip install -r requirements.txt
 npm run init
 npm run sync:workflows
 ```
@@ -87,6 +88,7 @@ npm run sync:workflows
 | Command                  | Purpose                                                                                                                                                                                       |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm install`            | Install Node.js dependencies (validation scripts, linting)                                                                                                                                    |
+| `pip install -r requirements.txt` | Install Python dependencies (Azure Pricing MCP server, diagrams, apex-recall CLI)                                                                                                  |
 | `npm run init`           | **One-time setup** — replaces all references to the accelerator template repo with your repo's URL (auto-detected from git remote). Run `npm run init -- --dry-run` first to preview changes. |
 | `npm run sync:workflows` | Fetches the latest GitHub Actions workflows from the [upstream APEX project](https://github.com/jonathan-vella/azure-agentic-infraops) into your `.github/workflows/` directory                |
 
@@ -97,12 +99,25 @@ git diff
 git add -A && git commit -m "chore: initialize from template"
 ```
 
-### 4. Authenticate (Optional)
+### 4. Set Up Azure (Optional)
+
+Run the setup wizard to configure Azure OIDC authentication, RBAC roles, and GitHub
+secrets/variables — all in one command:
 
 ```bash
-# Required only for Step 6 (Deploy) and governance discovery
 az login
+npm run setup
 ```
+
+The wizard creates an Entra ID app registration, OIDC federated credentials (for
+main branch + dev/staging/prod environments), assigns Reader at your Management Group
+and Contributor at your subscription, and configures all GitHub secrets and variables.
+It is idempotent — safe to re-run.
+
+See the [Azure Setup documentation](https://jonathan-vella.github.io/azure-agentic-infraops/getting-started/azure-setup/)
+for headless mode, manual setup steps, and troubleshooting.
+
+> **Skip this** if you are just exploring the agent workflow without deploying to Azure.
 
 ---
 
