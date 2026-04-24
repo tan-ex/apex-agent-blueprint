@@ -153,7 +153,7 @@ site/                  # Documentation site source (Astro Starlight)
 | `infra/bicep/` — your Bicep templates                | `.github/skills/` — agent skills             |
 | `.github/workflows/` — your CI/CD workflows          | `.github/instructions/` — coding rules       |
 | `README.md` — your documentation                     | `.github/copilot-instructions.md`            |
-|                                                      | `scripts/`, `site/`, `tools/`, `package.json` |
+|                                                      | `tools/`, `site/`, `package.json`            |
 |                                                      | `AGENTS.md`, `.devcontainer/`, `.vscode/`    |
 
 > **Note**: If you disable the sync workflow, everything becomes yours to edit freely.
