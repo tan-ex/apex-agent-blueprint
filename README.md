@@ -48,7 +48,7 @@ This repository is a **GitHub Template** — not a fork.
 
 1. Click **"Use this template"** → **"Create a new repository"** at the top of this page
 2. Choose an owner and name (e.g., `my-infraops-project`)
-3. Select **Private** (do not use Public — you already have the required access rights)
+3. Select **Private** (do not use Public)
 4. Click **Create repository**
 
 > Your new repo has the same directory structure and files but a **clean commit history**
