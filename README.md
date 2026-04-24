@@ -78,7 +78,6 @@ After the dev container starts, run the initialization commands:
 
 ```bash
 npm install
-pip install -r requirements.txt
 npm run init
 npm run sync:workflows
 ```
@@ -88,9 +87,11 @@ npm run sync:workflows
 | Command                  | Purpose                                                                                                                                                                                       |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm install`            | Install Node.js dependencies (validation scripts, linting)                                                                                                                                    |
-| `pip install -r requirements.txt` | Install Python dependencies (Azure Pricing MCP server, diagrams, apex-recall CLI)                                                                                                  |
 | `npm run init`           | **One-time setup** — replaces all references to the accelerator template repo with your repo's URL (auto-detected from git remote). Run `npm run init -- --dry-run` first to preview changes. |
 | `npm run sync:workflows` | Fetches the latest GitHub Actions workflows from the [upstream APEX project](https://github.com/jonathan-vella/azure-agentic-infraops) into your `.github/workflows/` directory                |
+
+> **Note:** Python dependencies (diagrams, Azure Pricing MCP server, apex-recall) are installed
+> automatically by the dev container's `post-create.sh` script. No manual `pip install` is needed.
 
 After running, review and commit:
 
@@ -138,9 +139,10 @@ agent-output/          # Generated artifacts organized by project
 infra/
   bicep/{project}/     # Bicep templates (main.bicep + modules/)
   terraform/{project}/ # Terraform configurations (main.tf + modules/)
-mcp/                   # MCP servers
-scripts/               # Validation scripts
-docs/                  # Documentation site source
+tools/
+  mcp-servers/         # MCP servers (azure-pricing, drawio)
+  scripts/             # Validation and maintenance scripts
+site/                  # Documentation site source (Astro Starlight)
 ```
 
 ### What's Yours vs. What's Upstream
@@ -151,7 +153,7 @@ docs/                  # Documentation site source
 | `infra/bicep/` — your Bicep templates                | `.github/skills/` — agent skills             |
 | `.github/workflows/` — your CI/CD workflows          | `.github/instructions/` — coding rules       |
 | `README.md` — your documentation                     | `.github/copilot-instructions.md`            |
-|                                                      | `scripts/`, `docs/`, `mcp/`, `package.json`  |
+|                                                      | `scripts/`, `site/`, `tools/`, `package.json` |
 |                                                      | `AGENTS.md`, `.devcontainer/`, `.vscode/`    |
 
 > **Note**: If you disable the sync workflow, everything becomes yours to edit freely.
@@ -227,7 +229,7 @@ filenames, or add your custom paths to the sync exclusion list.
 ## IaC Tracks: Bicep and Terraform
 
 Both IaC tracks are fully supported. The Requirements agent (Step 1) captures your
-`iac_tool` preference, and the Conductor routes Steps 4-6 to the correct track.
+`iac_tool` preference, and the Orchestrator routes Steps 4-6 to the correct track.
 
 | Factor          | Bicep                           | Terraform                                |
 | --------------- | ------------------------------- | ---------------------------------------- |
@@ -299,9 +301,10 @@ cd infra/terraform/{project} && terraform init -backend=false && terraform valid
 
 - [APEX upstream project](https://github.com/jonathan-vella/azure-agentic-infraops)
 - [APEX documentation](https://jonathan-vella.github.io/azure-agentic-infraops/)
+- [Azure Setup guide](https://jonathan-vella.github.io/azure-agentic-infraops/getting-started/azure-setup/)
 - [MicroHack (hands-on exercises)](https://jonathan-vella.github.io/microhack-agentic-infraops/)
-- [Prompt Guide](https://github.com/jonathan-vella/azure-agentic-infraops/tree/main/docs/prompt-guide)
-- [FAQ](https://jonathan-vella.github.io/azure-agentic-infraops/faq/)
+- [Prompt Guide](https://jonathan-vella.github.io/azure-agentic-infraops/guides/prompt-guide/)
+- [FAQ](https://jonathan-vella.github.io/azure-agentic-infraops/reference/faq/)
 
 ## License
 
