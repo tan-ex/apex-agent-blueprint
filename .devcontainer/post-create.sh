@@ -208,11 +208,13 @@ pwsh -NoProfile -Command "
 step_start "💰" "Setting up Azure Pricing MCP Server..."
 MCP_DIR="${PWD}/tools/mcp-servers/azure-pricing"
 if [ -d "$MCP_DIR" ]; then
-    # Detect a stale venv: created with a different Python minor (e.g. 3.13
-    # venv on a container upgraded to 3.14) leaves bin/pip orphaned because
-    # site-packages live under lib/python3.X/. Rebuild when version drifts
-    # or when ``python -m pip`` cannot import (covers both broken-pip and
-    # missing-venv cases).
+    # post-create runs once per container creation, so we always start from a
+    # clean venv here. This guarantees the venv matches the container's
+    # current Python minor (no 3.13 → 3.14 carry-over from a persisted
+    # workspace) and that no orphaned/half-broken pip survives a previous
+    # failed run. The drift/missing/broken-pip detector below is retained
+    # only to produce a meaningful reason label in the success message —
+    # post-start.sh keeps the conditional-rebuild path for every-start runs.
     #
     # Probe is fault-tolerant: ``|| echo ""`` keeps ``set -e`` from killing
     # the whole post-create run if python3 is temporarily unavailable. The
@@ -223,22 +225,17 @@ if [ -d "$MCP_DIR" ]; then
         VENV_PY_VER=$(grep -E '^version' "$MCP_DIR/.venv/pyvenv.cfg" 2>/dev/null \
             | head -1 | awk '{print $3}' | cut -d'.' -f1-2)
     fi
-    REBUILD_VENV=0
-    REBUILD_REASON=""
     if [ ! -f "$MCP_DIR/.venv/bin/python" ]; then
-        REBUILD_VENV=1
         REBUILD_REASON="missing venv"
     elif [ -n "$VENV_PY_VER" ] && [ -n "$SYS_PY_VER" ] && [ "$VENV_PY_VER" != "$SYS_PY_VER" ]; then
-        REBUILD_VENV=1
         REBUILD_REASON="Python ${VENV_PY_VER} → ${SYS_PY_VER} drift"
     elif ! "$MCP_DIR/.venv/bin/python" -m pip --version >/dev/null 2>&1; then
-        REBUILD_VENV=1
         REBUILD_REASON="broken pip"
+    else
+        REBUILD_REASON="clean rebuild (post-create policy)"
     fi
-    if [ "$REBUILD_VENV" -eq 1 ]; then
-        rm -rf "$MCP_DIR/.venv" 2>/dev/null || true
-        python3 -m venv "$MCP_DIR/.venv"
-    fi
+    rm -rf "$MCP_DIR/.venv" 2>/dev/null || true
+    python3 -m venv "$MCP_DIR/.venv"
 
     "$MCP_DIR/.venv/bin/python" -m pip install --quiet --upgrade pip 2>&1 | tail -1 || true
 
@@ -289,6 +286,28 @@ if command -v go &> /dev/null; then
     fi
 else
     step_warn "Go not found — Terraform MCP Server not installed"
+fi
+
+# ─── Step 9.5: Terraform CLI hardening ──────────────────────────────────────
+# The Terraform plugin-cache directory must exist before `terraform init` runs;
+# the CLI refuses to operate when TF_PLUGIN_CACHE_DIR points at a missing path.
+# devcontainer.json sets the env var; this step ensures the directory exists
+# and runs a `terraform version` smoke test to fail fast on misconfiguration.
+
+step_start "🪨" "Hardening Terraform CLI environment..."
+TF_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"
+if mkdir -p "$TF_CACHE_DIR" 2>/dev/null; then
+    if command -v terraform &>/dev/null; then
+        if terraform version > /dev/null 2>&1; then
+            step_done "plugin-cache=$TF_CACHE_DIR · $(terraform version | head -1)"
+        else
+            step_warn "terraform binary present but 'terraform version' failed"
+        fi
+    else
+        step_warn "Terraform not on PATH — plugin-cache dir created but CLI unverified"
+    fi
+else
+    step_warn "Could not create plugin-cache dir at $TF_CACHE_DIR"
 fi
 
 # ─── Step 10: Python dependencies (authoritative) ───────────────────────────
@@ -395,6 +414,12 @@ default_drawio = {
     "args": ["run", "-P", "--no-check", "--cached-only", "${workspaceFolder}/tools/mcp-servers/drawio/src/index.ts"],
 }
 
+default_azure_mcp = {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@azure/mcp@latest", "server", "start"],
+}
+
 data = {"servers": {}}
 
 if config_path.exists():
@@ -411,6 +436,7 @@ servers = data.setdefault("servers", {})
 servers.setdefault("azure-pricing", default_azure_pricing)
 servers.setdefault("github", default_github)
 servers.setdefault("drawio", default_drawio)
+servers.setdefault("azure-mcp", default_azure_mcp)
 config_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 PY
 
@@ -431,6 +457,13 @@ printf "        %-15s %s\n" "k6:" "$(k6 version 2>/dev/null || echo '❌ not ins
 printf "        %-15s %s\n" "Deno:" "$(deno --version 2>/dev/null | head -n1 || echo '❌ not installed')"
 printf "        %-15s %s\n" "gitleaks:" "$(gitleaks version 2>/dev/null || echo '❌ not installed')"
 printf "        %-15s %s\n" "terraform-mcp:" "$(( terraform-mcp-server --version 2>/dev/null || /go/bin/terraform-mcp-server --version 2>/dev/null ) | head -2 | tr '\n' ' ' || echo '❌ not installed')"
+
+# Wave 1+: assert minimum tool versions for IaC contract pipeline
+if [ -f "tools/scripts/validate-tool-versions.mjs" ]; then
+    node tools/scripts/validate-tool-versions.mjs --json > /tmp/tool-versions.json 2>/dev/null \
+        && echo "        Tool pins:      ✅ all ≥ minimum" \
+        || echo "        Tool pins:      ⚠️  one or more tools below pinned minimum (see tools/registry/tool-version-pins.json)"
+fi
 
 step_done "All verifications complete"
 

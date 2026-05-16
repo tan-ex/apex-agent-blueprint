@@ -1,6 +1,6 @@
 ---
 description: "Documentation and content creation standards for markdown files"
-applyTo: "site/src/content/docs/**/*.{md,mdx}, .github/copilot-instructions.md, .github/PULL_REQUEST_TEMPLATE.md, .github/plugins/**/*.md, .github/prompts/**/*.md, .github/skills/**/templates/**/*.md, agent-output/**/*.md, docs/**/*.md, infra/**/*.md, tools/mcp-servers/**/*.md, tools/scripts/**/*.md, tests/**/*.md, AGENTS.md, README.md, CHANGELOG.md, CONTRIBUTING.md, CONTRIBUTORS.md, QUALITY_SCORE.md, VERSION.md"
+applyTo: "site/src/content/docs/**/*.{md,mdx}, .github/copilot-instructions.md, .github/PULL_REQUEST_TEMPLATE.md, .github/plugins/**/*.md, tools/apex-prompts/**/*.md, .github/skills/**/templates/**/*.md, agent-output/**/*.md, docs/**/*.md, infra/**/*.md, tools/mcp-servers/**/*.md, tools/scripts/**/*.md, tests/**/*.md, AGENTS.md, README.md, CHANGELOG.md, CONTRIBUTING.md, CONTRIBUTORS.md, QUALITY_SCORE.md, VERSION.md"
 ---
 
 # Markdown Documentation Standards
@@ -41,23 +41,12 @@ Use the appropriate diagram skill for each output type:
 - **Architecture diagrams** → `drawio` skill (`.drawio`)
 - **WAF/cost/compliance charts** → `python-diagrams` skill (`.py` + `.png`)
 - **Inline markdown diagrams** → `mermaid` skill (fenced code blocks)
-- **Draw.io diagrams** → `drawio` skill (`.drawio`)
 
-## Template-First Approach
-
-Agents MUST follow `azure-artifacts/templates/`.
-See `azure-artifacts.instructions.md` for the complete heading reference.
-
-1. Preserve H2 heading order (invariant sections)
-2. No embedded skeletons — link to templates
-3. Optional sections after last required H2
-4. Validated by `tools/scripts/validate-artifacts.mjs`
-
-Enforcement: Lefthook pre-commit + CI + `npm run fix:artifact-h2`.
-
-## Visual Styling
-
-See `azure-artifacts/SKILL.md` for styling standards, emoji, callouts, formatting.
+> **Audience-specific guidance** — for human-authored documentation in
+> `site/src/content/docs/**` and `docs/**`, additional visual + template
+> rules live in `markdown-docs.instructions.md`. For agent-generated
+> artifacts in `agent-output/**`, H2 template compliance is enforced by
+> `azure-artifacts.instructions.md`.
 
 ## Patterns to Avoid
 

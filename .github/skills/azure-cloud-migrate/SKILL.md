@@ -1,6 +1,6 @@
 ---
 name: azure-cloud-migrate
-description: '**WORKFLOW SKILL** — Assess and migrate cross-cloud workloads to Azure. Generates assessment reports and converts code from AWS, GCP, or other providers to Azure services. WHEN: "migrate Lambda to Azure Functions", "migrate AWS to Azure", "convert AWS serverless to Azure", "migration readiness report", "cross-cloud migration". USE FOR: cross-cloud assessment, AWS-to-Azure code conversion, GCP-to-Azure code conversion. DO NOT USE FOR: greenfield Azure deployment (use azure-prepare), Azure-only refactor (use azure-prepare).'
+description: '**WORKFLOW SKILL** — Assess and migrate cross-cloud workloads to Azure. Generates assessment reports and converts code from AWS, GCP, or other providers to Azure services. WHEN: "migrate Lambda to Azure Functions", "migrate AWS to Azure", "convert AWS serverless to Azure", "migration readiness report", "cross-cloud migration". DO NOT USE FOR: greenfield Azure deployment (azure-prepare), Azure-only refactor (azure-prepare).'
 license: MIT
 metadata:
   author: Microsoft
@@ -21,6 +21,11 @@ metadata:
 6. Destructive actions require `ask_user` — [global-rules](references/services/functions/global-rules.md)
 
 ## Migration Scenarios
+
+The scenarios documented today are listed below. For other source platforms
+(GCP, on-premises, etc.), use the `microsoft_docs_search` MCP tool (from the
+Microsoft Learn MCP server) to research the target Azure service and adapt
+the AWS-Lambda assessment workflow as a template.
 
 | Source     | Target          | Reference                                                                      |
 | ---------- | --------------- | ------------------------------------------------------------------------------ |

@@ -1,6 +1,6 @@
 ---
 name: azure-validate
-description: '**WORKFLOW SKILL** — Pre-deployment validation for Azure readiness. Run deep checks on configuration, infrastructure (Bicep or Terraform), permissions, and prerequisites before deploying. WHEN: "validate my app", "check deployment readiness", "run preflight checks", "validate azure.yaml", "validate Bicep", "test before deploying", "validate Azure Functions". USE FOR: pre-deployment readiness checks, Bicep + Terraform preflight, Azure Functions validation. DO NOT USE FOR: post-deployment troubleshooting (use azure-diagnostics), executing deployments (use azure-deploy).'
+description: "**WORKFLOW SKILL** — Pre-deployment validation for Azure readiness. Deep checks on configuration, infrastructure (Bicep or Terraform), permissions, and prerequisites before deploying. WHEN: 'validate my app', 'check deployment readiness', 'run preflight checks', 'validate azure.yaml', 'validate Bicep', 'test before deploying', 'validate Azure Functions'. DO NOT USE FOR: post-deployment troubleshooting (azure-diagnostics), executing deployments (azure-deploy)."
 license: MIT
 metadata:
   author: Microsoft
@@ -35,6 +35,22 @@ metadata:
 1. Run after azure-prepare, before azure-deploy
 2. All checks must pass—do not deploy with failures
 3. ⛔ **Destructive actions require `ask_user`** — [global-rules](references/global-rules.md)
+
+## Validation Commands (per recipe)
+
+The per-recipe validation commands are bundled in
+[`references/recipes/`](references/recipes/README.md). Common ones:
+
+```bash
+azd provision --preview                 # AZD recipes
+bicep build infra/bicep/{project}/main.bicep && bicep lint infra/bicep/{project}/main.bicep
+terraform fmt -check && terraform validate && npm run validate:terraform
+npm run validate:iac-security-baseline  # cross-cutting baseline
+npm run validate:all                    # full repo validator suite
+```
+
+Load the recipe-specific README to confirm the exact command set for the
+project's IaC tool.
 
 ## Steps
 

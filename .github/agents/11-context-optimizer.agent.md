@@ -1,7 +1,7 @@
 ---
 name: 11-Context Optimizer
 model: ["Claude Opus 4.7"]
-description: Analyzes Copilot Chat debug logs to audit context window utilization across agents. Identifies bloated prompts, redundant file reads, missing hand-off points, and wasted tokens. Produces actionable optimization reports with specific agent/skill refactoring recommendations. Reusable across any project with custom agents. Does NOT modify agent definitions directly — produces recommendations only.
+description: "Analyzes Copilot Chat debug logs to audit context-window utilization across agents. Identifies bloated prompts, redundant file reads, missing hand-off points, and wasted tokens. Produces actionable optimization reports. Recommendations only — never edits agents."
 user-invocable: true
 agents: ["*"]
 tools:
@@ -46,9 +46,13 @@ and prompt trimming — without losing any context that matters.
 
 Read these before doing ANY work:
 
-1. **Read** `.github/skills/golden-principles/SKILL.digest.md` — the 10 operating invariants
+Batch independent skill reads into one parallel `read_file` call. **Never re-read** a file
+already in your conversation history (see
+[Context Hygiene](../instructions/agent-authoring.instructions.md#context-hygiene-token-efficiency)).
+
+1. **Read** `.github/skills/golden-principles/SKILL.md` — the 10 operating invariants
 2. **Read** `AGENTS.md` — project map and agent roster
-3. **Read** `.github/skills/context-management/SKILL.digest.md` — covers both runtime
+3. **Read** `.github/skills/context-management/SKILL.md` — covers both runtime
    compression (Mode A) and the diagnostic-audit methodology this agent uses (Mode B)
 
 ## What This Agent Does
@@ -122,7 +126,7 @@ Before any analysis, automatically create a baseline snapshot:
 npm run snapshot:baseline -- "ctx-opt-$(date -u +%Y%m%d-%H%M%S)"
 ```
 
-This backs up `.github/agents`, `.github/instructions`, `.github/prompts`,
+This backs up `.github/agents`, `.github/instructions`, `tools/apex-prompts`,
 `.github/skills`, and `AGENTS.md` to `agent-output/_baselines/{label}/`.
 Store the label for Phase 6.
 

@@ -1,6 +1,6 @@
 ---
 name: terraform-plan-subagent
-description: Terraform deployment preview subagent. Runs terraform plan to preview infrastructure changes before deployment. Classifies resources into create/update/destroy/replace, highlights destructive operations requiring explicit approval, and returns a structured change summary.
+description: Terraform deployment preview subagent. Runs terraform plan to preview changes before deployment. Classifies resources into create/update/destroy/replace, highlights destructive ops, returns structured change summary.
 model: ["Claude Sonnet 4.6"]
 user-invocable: false
 disable-model-invocation: false
@@ -23,9 +23,6 @@ tools:
     "azure-mcp/*",
     "microsoft-learn/*",
     todo,
-    ms-azuretools.vscode-azure-github-copilot/azure_query_azure_resource_graph,
-    ms-azuretools.vscode-azure-github-copilot/azure_get_auth_context,
-    ms-azuretools.vscode-azure-github-copilot/azure_set_auth_context,
     ms-azuretools.vscode-azureresourcegroups/azureActivityLog,
   ]
 ---
@@ -39,6 +36,16 @@ create / update / destroy / replace, surfaces destructive operations and
 policy errors, and returns a structured summary so the parent deploy
 agent can decide whether to proceed to `terraform apply`.
 </role>
+
+<input_contract>
+The parent agent passes **artifact paths plus the explicit input fields
+documented below — never the artifact bodies inline**. Re-read the
+working directory, plan file, or `04-governance-constraints.json` from
+disk on demand with bounded `read_file` ranges, and consult
+`apex-recall show <project> --json` for decision/finding lookups. If a
+required input field is missing, fail fast with the standard error shape
+rather than asking the parent to paste content.
+</input_contract>
 
 <context_awareness>
 This subagent does not load APEX skills directly. Domain context comes

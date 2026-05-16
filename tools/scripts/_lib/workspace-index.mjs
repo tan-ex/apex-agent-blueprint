@@ -120,14 +120,14 @@ export function resetIndex() {
  * `body` is the markdown after the closing `---`.
  *
  * Scans every directory listed in `PROMPT_SOURCE_DIRS` (production prompts in
- * `.github/prompts/` plus E2E test prompts in `tools/tests/prompts/`).
+ * `tools/apex-prompts/` plus E2E test prompts in `tools/tests/prompts/`).
  */
 export function getPromptFiles() {
   if (_prompts) return _prompts;
   _prompts = new Map();
   for (const dir of PROMPT_SOURCE_DIRS) {
     if (!fs.existsSync(dir)) continue;
-    for (const file of fs.readdirSync(dir)) {
+    for (const file of fs.readdirSync(dir, { recursive: true })) {
       if (!file.endsWith(".prompt.md")) continue;
       const filePath = path.join(dir, file);
       const content = fs.readFileSync(filePath, "utf-8");
