@@ -1,6 +1,6 @@
 ---
 name: terraform-validate-subagent
-description: "Terraform validation subagent. Runs lint (fmt -check, validate, tfsec) first, then code review (AVM-TF standards, naming, security baseline, RBAC, governance compliance). Returns structured PASS/FAIL with diagnostics and APPROVED/NEEDS_REVISION/FAILED verdict."
+description: "Terraform validation subagent. Runs lint (fmt -check, validate, tfsec) first, then code review (AVM-TF standards, naming, security baseline, RBAC, governance). Returns PASS/FAIL + APPROVED/NEEDS_REVISION/FAILED verdict."
 model: ["Claude Sonnet 4.6"]
 user-invocable: false
 disable-model-invocation: false
@@ -23,9 +23,6 @@ tools:
     "azure-mcp/*",
     "microsoft-learn/*",
     todo,
-    ms-azuretools.vscode-azure-github-copilot/azure_query_azure_resource_graph,
-    ms-azuretools.vscode-azure-github-copilot/azure_get_auth_context,
-    ms-azuretools.vscode-azure-github-copilot/azure_set_auth_context,
     ms-azuretools.vscode-azureresourcegroups/azureActivityLog,
   ]
 ---
@@ -40,17 +37,25 @@ privilege, and discovered governance constraints, returning a structured
 PASS/FAIL diagnostic and verdict for the parent IaC agent.
 </role>
 
-<context_awareness>
-Skill loading tiers (apply per the `context-management` skill, Mode A):
+<input_contract>
+The parent agent passes **artifact paths plus the explicit input fields
+documented below — never the artifact bodies inline**. Re-read Terraform
+source (`.tf`, `.tfvars`), tfsec output, or
+`04-governance-constraints.json` from disk on demand with bounded
+`read_file` ranges, and consult `apex-recall show <project> --json` for
+decision/finding lookups. If a required input field is missing, fail
+fast with the standard error shape rather than asking the parent to
+paste content.
+</input_contract>
 
-- Default — read `.github/skills/azure-defaults/SKILL.digest.md` and
-  `.github/skills/iac-common/SKILL.digest.md`. The digest is sufficient
-  for AVM versions, CAF naming, security baseline, and IaC review checks.
-- ≥80% context utilization — escalate to
-  `.github/skills/azure-defaults/SKILL.minimal.md` and
-  `.github/skills/iac-common/SKILL.minimal.md`.
-- Full `SKILL.md` is reserved for skill-authoring or debugging contexts
-  where the digest is insufficient — not for production reviews.
+<context_awareness>
+Read each `SKILL.md` once — there is a single tier (no digest/minimal
+variants):
+
+- `.github/skills/azure-defaults/SKILL.md` for AVM-TF versions, CAF naming,
+  security baseline, and IaC review checks.
+- `.github/skills/iac-common/SKILL.md` for shared deploy strategies and
+  known issues.
 
 Read `04-governance-constraints.json` from `agent-output/{project}/`
 whenever the parent agent provides a project name; translate every
@@ -186,7 +191,27 @@ not guess defaults.
      echo "TFSEC_SKIP: tfsec not installed"
    ```
 
-2. Classify the result using the table below. When `Phase 1 - Lint` is
+2. **Timeout-retry policy (Wave 1+)**: if `terraform init`,
+   `terraform validate`, or `terraform plan` times out or exits with a
+   transient network/HTTP error (5xx, ETIMEDOUT, ECONNRESET, registry
+   unreachable), retry **at most 2 times** with exponential backoff
+   (5s, 15s). After 2 retries, emit `Lint Status: FAIL` with
+   `transient: true` in the JSON output and return. Persistent
+   validation/parsing errors are NOT retried.
+
+3. **Validate-gate command (Wave 1+, when invoked by CodeGen Phase 4.6
+   or Deploy hash-mismatch rerun)** — also run a refresh-free plan:
+
+   ```bash
+   terraform plan -refresh=false -input=false \
+     -var-file={env}/main.tfvars.json -out=tfplan
+   ```
+
+   Same retry policy. Record `exit_code` and `stdout_sha256` in the
+   structured output's `validate_gate` block so it can be lifted into
+   `05-iac-handoff.json#validation_summary.validate_gate`.
+
+4. Classify the result using the table below. When `Phase 1 - Lint` is
    `FAIL`, set `Phase 2 - Review: SKIPPED`, `Overall Status: FAILED`,
    and skip Phase 2.
 

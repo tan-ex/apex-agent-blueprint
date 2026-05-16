@@ -129,22 +129,22 @@ frontmatter loading. Always quote (or use the array form for agents).
 
 Agents that specify `Claude Opus 4.7` as priority model do so deliberately:
 
-- **Opus-first agents** (requirements, architect, iac-plan, context-optimizer,
-  diagnose) use `Claude Opus 4.7` for architecture decisions, WAF assessments,
-  planning accuracy, and complex analysis. Reasoning effort is a per-agent
-  policy (see "Reasoning-effort policy" below) — not encoded in the model
-  label.
-- **Claude Sonnet 4.6 agents** (design, plus the four IaC validation/preview
-  subagents `bicep-validate`, `bicep-whatif`, `terraform-validate`,
-  `terraform-plan`): Anthropic prompting style (XML-tagged blocks, role-first,
-  quote-grounded review, checklist-driven structured output) suits both ADR +
-  diagram authoring and the structured PASS/FAIL findings produced by the
-  validation subagents. Default Sonnet 4.6 effort is `high`; the Design agent
-  and the four subagents pin effort to `medium` for typical work and only
-  raise it for large change sets.
+- **Opus-first agents** (requirements, architect, iac-plan, context-optimizer)
+  use `Claude Opus 4.7` for architecture decisions, WAF assessments, planning
+  accuracy, and complex analysis. Reasoning effort is a per-agent policy (see
+  "Reasoning-effort policy" below) — not encoded in the model label.
+- **Claude Sonnet 4.6 agents** (design, bicep codegen, terraform codegen, plus
+  the four IaC validation/preview subagents `bicep-validate`, `bicep-whatif`,
+  `terraform-validate`, `terraform-plan`): Anthropic prompting style (XML-tagged
+  blocks, role-first, quote-grounded review, checklist-driven structured output)
+  suits ADR + diagram authoring, AVM-first IaC code generation with verbatim
+  invariant retention, and the structured PASS/FAIL findings produced by the
+  validation subagents. Default Sonnet 4.6 effort is `high`; the Design agent,
+  both CodeGen agents, and the four subagents pin effort to `medium` for typical
+  work and only raise it for large change sets.
 - **GPT-5.5 agents** (orchestrator, orchestrator fast path, governance,
-  bicep codegen, terraform codegen, challenger wrapper, challenger-review-subagent,
-  deploy (Bicep + Terraform), as-built, e2e-orchestrator)
+  challenger wrapper, challenger-review-subagent, deploy (Bicep + Terraform),
+  as-built, diagnose, e2e-orchestrator)
   use the OpenAI GPT-5.5 prompting style: explicit Role / Personality / Goal /
   Success / Constraints / Output / Stop sections, retrieval budgets, decision rules
   over absolutes, and stopping conditions. GPT-5.5 reasons more efficiently than
@@ -170,25 +170,25 @@ The migrated GPT-5.5 cohort follows the OpenAI GPT-5.5 prompting guide:
 
 Current model assignments:
 
-| Agent / Group                       | Model             | Rationale                                    |
-| ----------------------------------- | ----------------- | -------------------------------------------- |
-| Orchestrator                        | GPT-5.5           | Outcome-first orchestration                  |
-| Orchestrator (Fast Path)            | GPT-5.5           | Streamlined orchestration                    |
-| Requirements                        | Claude Opus 4.7   | Deep understanding (high effort)             |
-| Architect                           | Claude Opus 4.7   | WAF analysis + cost (high effort)            |
-| Design                              | Claude Sonnet 4.6 | Diagram + ADR (Anthropic style)              |
-| Governance                          | GPT-5.5           | Procedural discovery                         |
-| IaC Planner (unified)               | Claude Opus 4.7   | Planning accuracy (high effort)              |
-| Bicep / Terraform Code              | GPT-5.5           | Code generation                              |
-| Deploy (Bicep + TF)                 | GPT-5.5           | Deployment execution (outcome-first)         |
-| As-Built                            | GPT-5.5           | Documentation generation (outcome-first)     |
-| Diagnose                            | Claude Opus 4.7   | Interactive troubleshooting (default effort) |
-| Context Optimizer                   | Claude Opus 4.7   | Deep analysis (high effort)                  |
-| E2E Orchestrator                    | GPT-5.5           | Autonomous benchmark loop                    |
-| Challenger wrapper                  | GPT-5.5           | Structured review                            |
-| Challenger subagent                 | GPT-5.5           | Structured review                            |
-| Bicep/TF validate+preview subagents | Claude Sonnet 4.6 | Isolated validation (Anthropic style)        |
-| Cost estimate subagent              | GPT-5.3-Codex     | High-throughput pricing                      |
+| Agent / Group                       | Model             | Rationale                                |
+| ----------------------------------- | ----------------- | ---------------------------------------- |
+| Orchestrator                        | GPT-5.5           | Outcome-first orchestration              |
+| Orchestrator (Fast Path)            | GPT-5.5           | Streamlined orchestration                |
+| Requirements                        | Claude Opus 4.7   | Deep understanding (high effort)         |
+| Architect                           | Claude Opus 4.7   | WAF analysis + cost (high effort)        |
+| Design                              | Claude Sonnet 4.6 | Diagram + ADR (Anthropic style)          |
+| Governance                          | GPT-5.5           | Procedural discovery                     |
+| IaC Planner (unified)               | Claude Opus 4.7   | Planning accuracy (high effort)          |
+| Bicep / Terraform Code              | Claude Sonnet 4.6 | Code generation (Anthropic style, verbatim invariants) |
+| Deploy (Bicep + TF)                 | GPT-5.5           | Deployment execution (outcome-first)     |
+| As-Built                            | GPT-5.5           | Documentation generation (outcome-first) |
+| Diagnose                            | GPT-5.5           | Approval-first diagnostics               |
+| Context Optimizer                   | Claude Opus 4.7   | Deep analysis (high effort)              |
+| E2E Orchestrator                    | GPT-5.5           | Autonomous benchmark loop                |
+| Challenger wrapper                  | GPT-5.5           | Structured review                        |
+| Challenger subagent                 | GPT-5.5           | Structured review                        |
+| Bicep/TF validate+preview subagents | Claude Sonnet 4.6 | Isolated validation (Anthropic style)    |
+| Cost estimate subagent              | GPT-5.3-Codex     | High-throughput pricing                  |
 
 #### Reasoning-effort policy
 
@@ -202,10 +202,9 @@ effort is documented in this section and inferred from the agent's role:
   reasoning produces measurably better outcomes (WAF trade-offs, plan
   accuracy, deep audits). Sonnet-tier agents pin to `medium` for typical work
   and only escalate for large change sets.
-- **Default effort** — Diagnose. The interactive approval-first flow benefits
-  from default effort: Diagnose alternates short reasoning bursts with user
-  confirmations, so deep multi-step deliberation per turn would just slow the
-  flow without improving accuracy.
+- **Default effort** — Diagnose. The interactive approval-first GPT-5.5 flow
+  alternates short reasoning bursts with user confirmations, so deep multi-step
+  deliberation per turn would just slow the flow without improving accuracy.
 - **Effort tuning is a per-call concern** — Copilot Chat / VS Code respects
   the user's per-turn reasoning-effort selector and any harness-level
   override. The policy above is the project's recommended default; no
@@ -386,6 +385,96 @@ If an agent contains an embedded template in its body, it MUST match the relevan
 
 ---
 
+## Context Hygiene (Token Efficiency)
+
+These rules apply to every primary agent. They preserve quality while
+cutting wasted tokens — duplicate reads, sequential prompts that could be
+batched, and verbose frontmatter that the router doesn't need.
+
+### No-duplicate-read rule
+
+> A file in your conversation history is already loaded. Never call
+> `read_file` on a file you (or a subagent in the same session) have
+> already read. If you need its content again, re-use the earlier tool
+> result — the model retains it.
+
+The most expensive duplicates we've observed:
+
+| Path | Typical cost per duplicate |
+| --- | --- |
+| `.github/skills/azure-defaults/SKILL.md` | ~1.25k tokens |
+| `.github/skills/azure-artifacts/SKILL.md` | ~1.25k tokens |
+| `.github/skills/workflow-engine/SKILL.md` | ~1.25k tokens |
+| `.github/skills/azure-artifacts/templates/*.template.md` | ~1.25k each |
+
+When an agent body says "Read X" but X may already be in history, prefer:
+"Read X **if not already read this session**".
+
+### Batched-read rule
+
+When an agent's runbook lists several preparatory `read_file` calls (e.g.
+"1. Read SKILL.md X / 2. Read SKILL.md Y / 3. Read template Z"), issue them
+in a single parallel tool batch. One round-trip × N files is ~5–10× cheaper
+than N sequential turns because each turn replays the entire prior context.
+
+### Prefer targeted search over semantic search
+
+When you need to locate a known symbol, file path, or exact phrase,
+prefer `grep_search` (exact / regex) and bounded `read_file` ranges over
+`semantic_search`. Semantic search returns a wider, less predictable
+result set and inflates context. Reserve `semantic_search` for genuinely
+exploratory work where you do not yet know what to search for.
+
+### Batched-question rule
+
+When an agent gathers structured input via `askQuestions`, group questions
+that have **no data dependency** on each other into a single batched
+invocation (the `questions[]` array supports this natively). Each call =
+one full system-prompt replay; merging 10 independent questions into 1
+batch saves ~9 turns × ~60k baseline ≈ ~540k tokens.
+
+Only split into separate calls when a later question's content (label,
+options, multiSelect) genuinely depends on a prior answer.
+
+### Frontmatter `description` length
+
+Keep `description:` ≤ 300 chars for both agents and skills. The Copilot
+router matches on the *trigger keywords* in the description; long anti-
+scope language (`USE FOR:` / `DO NOT USE FOR:` / `INVOKES:` lists)
+duplicates content that already lives in the agent or SKILL body and is
+not needed for routing. Putting it in the description costs tokens on
+every model call.
+
+If anti-scope clarity matters for routing of close-cousin skills
+(e.g. `azure-prepare` vs `azure-cloud-migrate`), keep the `WHEN:` trigger
+keywords and a single short anti-scope clause; move the full table into
+the body.
+
+### User-scope customization bloat (advisory)
+
+VS Code Copilot **merges workspace agents/skills with user-scope and
+extension-bundled ones**. In a typical dev container that includes the
+Cosmos DB extension, GitHub PR extension, AI Toolkit, and similar, the
+discovery layer injects 10–15 unrelated agents/skills into every system
+prompt (~10–15k baseline tokens per turn).
+
+There is **no documented workspace `settings.json` toggle** that
+disables global scope as of writing. The only reliable mitigations are:
+
+- Uninstall noisy extensions in the dev container (`devcontainer.json`
+  `customizations.vscode.extensions[]`) — touches all contributors, so
+  prefer per-developer settings.
+- Delete the user-scope customization directories the developer doesn't
+  need (`~/.agents/skills/<name>/`, `~/.copilot/instructions/`,
+  user-level Code prompts folder).
+- Treat the baseline injection as an immovable constant and prioritize
+  reducing per-turn replay (Batched-read / Batched-question rules above).
+
+This advisory is informational. Do not modify a contributor's dev
+container or user-scope settings as part of an agent change.
+
+---
+
 ## Decision Logging
 
 When you make a significant choice during your workflow step, append an entry to
@@ -446,14 +535,14 @@ Sources: [Anthropic Claude Prompting Best Practices][claude-guide].
 Add XML blocks only where they serve the agent's actual role. Each block should
 be 3-5 lines. Place them after the first `#` heading, before the body content.
 
-| Block                            | Add when                                                         | Do NOT add when                                                      |
-| -------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `<investigate_before_answering>` | Agent researches before deciding (Architect, Planners, Diagnose) | ONE-SHOT agents (Requirements), procedural wrappers (lint subagents) |
-| `<output_contract>`              | Agent produces a formal artifact with defined structure          | Agent has no structured output                                       |
-| `<context_awareness>`            | Agent definition exceeds ~350 lines                              | Small agents, subagents                                              |
-| `<scope_fencing>`                | Agent produces scoped artifacts where creep is a risk            | Agents whose job is comprehensive analysis (Architect)               |
-| `<empty_result_recovery>`        | Agent queries Azure APIs that may return empty results           | Agents that don't call external APIs                                 |
-| `<subagent_budget>`              | Agent orchestrates 3+ subagents                                  | Leaf agents that don't delegate                                      |
+| Block                            | Add when                                                                  | Do NOT add when                                                      |
+| -------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `<investigate_before_answering>` | Agent researches before deciding (Architect, Planners, Context Optimizer) | ONE-SHOT agents (Requirements), procedural wrappers (lint subagents) |
+| `<output_contract>`              | Agent produces a formal artifact with defined structure                   | Agent has no structured output                                       |
+| `<context_awareness>`            | Agent definition exceeds ~350 lines                                       | Small agents, subagents                                              |
+| `<scope_fencing>`                | Agent produces scoped artifacts where creep is a risk                     | Agents whose job is comprehensive analysis (Architect)               |
+| `<empty_result_recovery>`        | Agent queries Azure APIs that may return empty results                    | Agents that don't call external APIs                                 |
+| `<subagent_budget>`              | Agent orchestrates 3+ subagents                                           | Leaf agents that don't delegate                                      |
 
 **Never add**: `<use_parallel_tool_calls>` (Claude does this natively),
 `<avoid_overengineering>` on comprehensive-analysis agents.

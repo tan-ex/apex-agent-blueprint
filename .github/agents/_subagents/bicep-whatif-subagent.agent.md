@@ -1,6 +1,6 @@
 ---
 name: bicep-whatif-subagent
-description: Bicep deployment preview subagent. Runs az deployment group what-if to preview changes before deployment. Analyzes policy violations, resource changes, and cost impact. Returns structured summary for parent agent review.
+description: Bicep deployment preview subagent. Runs az deployment group what-if to preview changes. Analyzes policy violations, resource changes, cost impact. Returns structured summary.
 model: ["Claude Sonnet 4.6"]
 user-invocable: false
 disable-model-invocation: false
@@ -24,9 +24,6 @@ tools:
     "microsoft-learn/*",
     todo,
     vscode.mermaid-chat-features/renderMermaidDiagram,
-    ms-azuretools.vscode-azure-github-copilot/azure_query_azure_resource_graph,
-    ms-azuretools.vscode-azure-github-copilot/azure_get_auth_context,
-    ms-azuretools.vscode-azure-github-copilot/azure_set_auth_context,
     ms-azuretools.vscode-azureresourcegroups/azureActivityLog,
   ]
 ---
@@ -39,6 +36,16 @@ generated Bicep templates, classifies the proposed changes, surfaces policy
 violations and cost impact, and returns a structured summary so the parent
 deploy agent can decide whether to proceed.
 </role>
+
+<input_contract>
+The parent agent passes **artifact paths plus the explicit input fields
+documented below — never the artifact bodies inline**. Re-read the
+template, parameter file, or `04-governance-constraints.md` from disk on
+demand with bounded `read_file` ranges, and consult
+`apex-recall show <project> --json` for decision/finding lookups. If a
+required input field is missing, fail fast with the standard error shape
+rather than asking the parent to paste content.
+</input_contract>
 
 <context_awareness>
 This subagent does not load APEX skills directly. Domain context comes from

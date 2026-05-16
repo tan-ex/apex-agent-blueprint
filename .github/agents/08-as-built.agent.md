@@ -1,6 +1,6 @@
 ---
 name: 08-As-Built
-description: "Generates Step 7 as-built documentation suite after successful deployment. Reads all prior artifacts (Steps 1-6) and deployed resource state to produce comprehensive workload documentation: design document, operations runbook, cost estimate, compliance matrix, backup/DR plan, resource inventory, and documentation index."
+description: "Generates Step 7 as-built documentation suite after successful deployment. Reads all prior artifacts (Steps 1-6) and deployed resource state to produce: design document, operations runbook, cost estimate, compliance matrix, backup/DR plan, resource inventory, and documentation index."
 model: ["GPT-5.5"]
 user-invocable: true
 agents: ["cost-estimate-subagent"]
@@ -98,8 +98,9 @@ and preserved verbatim, so no parsing changes are required here.
 
 ## Context Awareness
 
-**This is a large agent definition (~405 lines).** At >60% context, load SKILL.digest.md variants.
-At >80% context, switch to SKILL.minimal.md and do not re-read predecessor artifacts.
+**This is a large agent definition (~405 lines).** Read each `SKILL.md` only
+once; do not re-read predecessor artifacts after the boot read — use
+`apex-recall show <project> --json` for cached lookups instead.
 
 ## Scope
 
@@ -109,13 +110,16 @@ Do not modify deployed infrastructure, change IaC templates, or skip prior artif
 
 ## Read Skills First
 
-Before doing any work, read these skills:
+Before doing any work, read these skills. Issue the SKILL.md reads and the template-file
+reads in **one parallel `read_file` batch** to amortize cost. **Never re-read** a file
+already in your conversation history (see
+[Context Hygiene](../instructions/agent-authoring.instructions.md#context-hygiene-token-efficiency)).
 
-1. Read `.github/skills/azure-defaults/SKILL.digest.md` — regions, tags, naming, pricing MCP names
-2. Read `.github/skills/azure-artifacts/SKILL.digest.md` — H2 templates for all 07-\* artifacts
-3. Read `.github/skills/drawio/SKILL.digest.md` — diagram generation contract
-4. Read `.github/skills/python-diagrams/SKILL.digest.md` — WAF/cost chart generation
-5. Read `.github/skills/context-management/SKILL.digest.md` — runtime compression for predecessor artifacts (Mode A)
+1. Read `.github/skills/azure-defaults/SKILL.md` — regions, tags, naming, pricing MCP names
+2. Read `.github/skills/azure-artifacts/SKILL.md` — H2 templates for all 07-\* artifacts
+3. Read `.github/skills/drawio/SKILL.md` — diagram generation contract
+4. Read `.github/skills/python-diagrams/SKILL.md` — WAF/cost chart generation
+5. Read `.github/skills/context-management/SKILL.md` — runtime compression for predecessor artifacts (Mode A)
 6. Read the template files for your artifacts (all in `.github/skills/azure-artifacts/templates/`):
    - `07-design-document.template.md`
    - `07-operations-runbook.template.md`
@@ -190,15 +194,24 @@ edge routing, group sizing, and cross-cutting service placement.
 
 Before starting, validate these artifacts exist in `agent-output/{project}/`:
 
-| Artifact                         | Required | Purpose                      |
-| -------------------------------- | -------- | ---------------------------- |
-| `01-requirements.md`             | Yes      | Original requirements        |
-| `02-architecture-assessment.md`  | Yes      | WAF assessment and decisions |
-| `04-implementation-plan.md`      | Yes      | Planned architecture         |
-| `06-deployment-summary.md`       | Yes      | Deployment results           |
-| `03-des-cost-estimate.md`        | No       | Original cost estimate       |
-| `04-governance-constraints.md`   | No       | Governance findings          |
-| `05-implementation-reference.md` | No       | Bicep validation results     |
+| Artifact                         | Required | Purpose                                                           |
+| -------------------------------- | -------- | ----------------------------------------------------------------- |
+| `01-requirements.md`             | Yes      | Original requirements                                             |
+| `02-architecture-assessment.md`  | Yes      | WAF assessment and decisions                                      |
+| `04-implementation-plan.md`      | Yes      | Planned architecture (prose mirror)                               |
+| `04-iac-contract.json`           | Yes¹     | Machine-readable plan shape (Wave 1+); preferred over prose       |
+| `04-policy-property-map.json`    | Yes¹     | L1m governance attestation                                        |
+| `04-environment-manifest.json`   | Yes¹     | Per-environment values (redaction-aware reads only)               |
+| `05-iac-handoff.json`            | Yes¹     | CodeGen → Deploy handoff with validation + governance attestation |
+| `06-deployment-summary.md`       | Yes      | Deployment results                                                |
+| `03-des-cost-estimate.md`        | No       | Original cost estimate                                            |
+| `04-governance-constraints.md`   | No       | Governance findings                                               |
+| `05-implementation-reference.md` | No       | Bicep validation results (legacy projects only)                   |
+
+¹ Wave 1+/Wave 3+ artifacts. **Prefer reading these over the prose
+mirrors** — `04-iac-contract.json` and `05-iac-handoff.json` are
+canonical and validator-checked. Fall back to prose only for legacy
+projects predating Wave 1.
 
 If `06-deployment-summary.md` is missing, STOP — deployment has not completed.
 
@@ -217,18 +230,60 @@ Run `apex-recall show <project> --json` for full project context. Do not read `0
   Record: documentation scope decisions, resource inventory inclusions/exclusions.
 - **On completion**: `apex-recall complete-step <project> 7 --json`
 
+## SKU Manifest — Bidirectional Drift Detection
+
+After deployment, `08-As-Built` is responsible for closing the loop:
+
+1. Load `agent-output/{project}/sku-manifest.json` `services[]`.
+2. For each `(id, env, region)`, query the deployed Azure resource (via
+   `az resource show` / Resource Graph) and read the live SKU.
+3. Populate `services[].actual_sku.{env}.{region}` with the observed value.
+4. Cross-check against IaC source (Bicep templates / Terraform state) so
+   drift is detected in **three directions**:
+   - manifest ↔ Azure live
+   - manifest ↔ IaC code
+   - IaC code ↔ Azure live
+5. Emit one finding per mismatch via `apex-recall finding`. Reference the
+   manifest `id` and which directions diverged.
+6. Set `decisions.sku_manifest_status = "drift"` if any mismatch exists,
+   otherwise leave `deployed`.
+7. Append a new manifest revision (`agent: "08-As-Built"`, `step: "7"`)
+   capturing the `actual_sku` writes. **Do not change `services[].size`
+   or `services[].source`** — drift is reported, not auto-healed.
+8. The `07-resource-inventory.md` H2 table includes the `actual_sku`
+   column per env/region rendered from the manifest.
+
 ## Core Workflow
 
 ### Phase 1: Context Gathering
 
-1. **Read all prior artifacts** (01-06) from `agent-output/{project}/`
-2. **Read IaC source** — determine IaC tool from `01-requirements.md` (`iac_tool` field):
+Apply the **Predecessor Artifact Read Policy** below — do not default to
+"read all 01–06 in full". Compression tiers come from
+`.github/skills/context-management/SKILL.md` (Mode A).
+
+| Artifact                            | Read mode             | Why                                                              |
+| ----------------------------------- | --------------------- | ---------------------------------------------------------------- |
+| `01-requirements.md`                | summarized (Mode A)   | Need scope + NFRs only; decisions live in apex-recall            |
+| `02-architecture-assessment.md`     | summarized (Mode A)   | Cross-check WAF scores + cost baseline; not the source of truth  |
+| `03-des-*.md`                       | skip unless ADR cited | Fetch a specific ADR only if `04-implementation-plan.md` cites it |
+| `04-governance-constraints.md`      | summarized (Mode A)   | Use JSON below; prose only for narrative compliance matrix       |
+| `04-governance-constraints.json`    | **full**              | Drives `07-compliance-matrix.md` rows directly                   |
+| `04-implementation-plan.md`         | **full**              | Canonical planned→deployed mapping for `07-design-document.md`   |
+| `04-iac-contract.json`              | **full** (Wave 1+)    | Machine-readable plan shape; prefer over prose mirror            |
+| `05-implementation-reference.md`    | summarized (Mode A)   | Validation results only; skip entirely for non-legacy projects   |
+| `05-iac-handoff.json`               | **full** (Wave 3+)    | CodeGen → Deploy handoff + governance attestation                |
+| `06-deployment-summary.md`          | **full**              | Actual deployed state — primary truth for resource inventory    |
+| `sku-manifest.json`                 | **full**              | Small; required for bidirectional drift detection                |
+
+Then continue:
+
+1. **Read IaC source** — determine IaC tool from `01-requirements.md` (`iac_tool` field):
    - **Bicep path**: Read templates from `infra/bicep/{project}/` for resource details
    - **Terraform path**: Read configurations from
      `infra/terraform/{project}/` and run `terraform output -json`
      for deployed resource attributes
-3. **Query deployed resources** via Azure CLI / Resource Graph for actual state
-4. **Read deployment summary** for resource IDs, names, and endpoints
+2. **Query deployed resources** via Azure CLI / Resource Graph for actual state
+3. **Read deployment summary** for resource IDs, names, and endpoints
 
 ### Phase 1.5: Context Compaction
 
@@ -241,8 +296,8 @@ Compact before generating the 7-document suite.
    - Deployment result from `06-deployment-summary.md` (success/partial, resource count)
    - Compliance requirements from `01-requirements.md`
    - Cost estimate baseline from `03-des-cost-estimate.md` (monthly total)
-2. **Switch to minimal skill loading** — for any further skill reads, use
-   `SKILL.minimal.md` variants (see `context-management` skill, Mode A, >80% tier)
+2. **Stop loading additional skills** — once context is compacted, do not load
+   any new skill files; rely on summaries already in context
 3. **Do NOT re-read predecessor artifacts during doc generation** — rely on
    the summary above and query Azure CLI for specific resource details as needed
 4. **Update session state** — run `apex-recall checkpoint <project> 7 phase_1.5_compacted --json`
@@ -330,13 +385,13 @@ Follow the batch-only workflow from the drawio skill:
 
 ```bash
 # List all resources in the project resource group
-az resource list --resource-group {rg-name} --output table
+az resource list --resource-group {rg-name} --output table > /tmp/{project}-resources.txt && head -50 /tmp/{project}-resources.txt
 
 # Get resource details
 az resource show --ids {resource-id} --output json
 
 # Resource Graph query for deployed resources
-az graph query -q "resources | where resourceGroup == '{rg-name}' | project name, type, location, sku, properties"
+az graph query -q "resources | where resourceGroup == '{rg-name}' | project name, type, location, sku, properties" > /tmp/{project}-graph.json && head -100 /tmp/{project}-graph.json
 ```
 
 ## Output Files

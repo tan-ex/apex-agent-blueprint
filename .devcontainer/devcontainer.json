@@ -66,13 +66,12 @@
         "GitHub.copilot-chat",
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-vscode.vscode-node-azure-pack",
         "ms-azuretools.vscode-azureresourcegroups",
         "ms-azuretools.vscode-bicep",
         "ms-vscode.powershell",
         "bierner.markdown-mermaid",
         "bierner.markdown-preview-github-styles",
-        "davidanson.vscode-markdownlint",
+        "DavidAnson.vscode-markdownlint",
         "ms-vscode.azurecli",
         "ms-azuretools.vscode-azurecontainerapps",
         "ms-azuretools.vscode-azurestaticwebapps",
@@ -82,7 +81,6 @@
         "ms-kubernetes-tools.vscode-aks-tools",
         "github.vscode-github-actions",
         "github.vscode-pull-request-github",
-        "ms-azuretools.vscode-azure-mcp-server",
         "esbenp.prettier-vscode",
         "mechatroner.rainbow-csv",
         "redhat.vscode-yaml",
@@ -93,6 +91,8 @@
         "denoland.vscode-deno"
       ],
       "settings": {
+        "chat.useAgentsMdFile": true,
+        "chat.useNestedAgentsMdFiles": true,
         "chat.customAgentInSubagent.enabled": true,
         "chat.agentFilesLocations": {
           ".github/agents": true,

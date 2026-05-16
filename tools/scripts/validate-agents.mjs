@@ -67,6 +67,12 @@ const MAIN_AGENT_REQUIRED = ["name", "description", "user-invocable", "tools"];
 const SUBAGENT_REQUIRED = ["name", "description", "user-invocable", "tools"];
 const RECOMMENDED_FIELDS = ["agents", "model"];
 const BLOCK_SCALAR_PATTERN = /^description:\s*[>|][-\s]*$/m;
+// Description length cap: enforces concise routing-keyword-only descriptions.
+// See .github/instructions/agent-authoring.instructions.md#frontmatter-description-length.
+// Anti-scope language belongs in the body, not in the description field —
+// every char here ships with every model call (~10x compounding cost).
+const DESCRIPTION_MAX_LEN = 350;
+const DESCRIPTION_WARN_LEN = 300;
 
 const ALLOWED_NON_INVOCABLE_MAIN_AGENTS = new Set(["e2e-orchestrator.agent.md"]);
 
@@ -88,6 +94,21 @@ function runFrontmatterValidation() {
 
     if (BLOCK_SCALAR_PATTERN.test(content)) {
       r.error(relativePath, "description uses a YAML block scalar (>, >-, | or |-). Use a single-line inline string.");
+    }
+
+    if (frontmatter && typeof frontmatter.description === "string") {
+      const len = frontmatter.description.length;
+      if (len > DESCRIPTION_MAX_LEN) {
+        r.error(
+          relativePath,
+          `description is ${len} chars (max ${DESCRIPTION_MAX_LEN}). Trim USE FOR/INVOKES content into the body; keep WHEN keywords + a short anti-scope clause.`,
+        );
+      } else if (len > DESCRIPTION_WARN_LEN) {
+        r.warn(
+          relativePath,
+          `description is ${len} chars (recommend ≤ ${DESCRIPTION_WARN_LEN}). Drop redundant USE FOR / INVOKES lines.`,
+        );
+      }
     }
 
     if (!frontmatter) {
@@ -214,9 +235,24 @@ function runAgentChecks() {
 
   const agents = getAgents();
 
+  // Build the set of known subagent names from files under _subagents/.
+  // Used by the body-vs-frontmatter declaration check below.
+  const knownSubagents = new Set();
+  for (const [, agent] of agents) {
+    if (agent.isSubagent && agent.frontmatter?.name) {
+      knownSubagents.add(agent.frontmatter.name);
+    }
+  }
+
+  // Invocation verbs that imply a real subagent call (vs. a prose mention).
+  // Conservative on purpose — false negatives are preferable to false positives
+  // here; documentation references should not trigger errors.
+  const INVOCATION_VERB_RE =
+    /(?:invoke|delegate(?:\s+to)?|dispatch|call|run|hand[\s-]?off|@|#runSubagent|via\s+`?#runSubagent`?)/i;
+
   for (const [file, agent] of agents) {
     r.tick();
-    const { path: filePath, content } = agent;
+    const { path: filePath, content, isSubagent } = agent;
     const body = getBody(content);
     const bodyLines = body.split("\n").length;
 
@@ -238,6 +274,35 @@ function runAgentChecks() {
         `${file}: ${total} absolute-language keywords in ${lines} lines (${density.toFixed(1)}/100 > ${MAX_DENSITY_PER_100}/100). Breakdown: ${breakdown}`,
       );
       console.log(`  Fix: Soften language or extract content to skill references.`);
+    }
+
+    // Subagent invocation vs. `agents:` declaration consistency check.
+    // VS Code's subagent discovery uses the `agents:` frontmatter array;
+    // a body that invokes a subagent not declared there falls back to the
+    // generic runSubagent runner ("not registered in this VS Code agent list").
+    if (!isSubagent) {
+      const declared = new Set(Array.isArray(agent.frontmatter?.agents) ? agent.frontmatter.agents : []);
+      const missing = new Set();
+      for (const subagentName of knownSubagents) {
+        if (declared.has(subagentName)) continue;
+        // Look for invocation patterns within ±60 chars of the name.
+        const escaped = subagentName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const proximityRe = new RegExp(`.{0,60}\`?${escaped}\`?.{0,60}`, "gi");
+        const matches = body.match(proximityRe) || [];
+        for (const m of matches) {
+          if (INVOCATION_VERB_RE.test(m)) {
+            missing.add(subagentName);
+            break;
+          }
+        }
+      }
+      for (const name of missing) {
+        r.errorAnnotation(
+          filePath,
+          `${file} invokes \`${name}\` in body but does not declare it in \`agents:\` frontmatter (VS Code subagent discovery will fail)`,
+        );
+        console.log(`  Fix: Add "${name}" to the \`agents:\` array in the frontmatter.`);
+      }
     }
   }
 
@@ -604,7 +669,27 @@ function effectiveSeverity(rule, family) {
   return base;
 }
 
-/** Names of agents whose contract is ONE-SHOT (single round, no investigate). */
+/**
+ * Names of agents whose contract is ONE-SHOT (single round, no investigate).
+ *
+ * Phase 12 (plan-simplifyChallengerReviews) — batch-mode resolution:
+ *
+ * `challenger-review-subagent` supports both single-lens mode (the
+ * orchestrated default) and batch mode (rotating-lens passes 2+3
+ * combined for deep reviews). Batch mode runs N lenses in ONE
+ * subagent invocation. The strict "one-shot" semantic was preserved
+ * via **Option A**: batch mode is implemented by the subagent
+ * **internally** — the parent dispatches a SINGLE \`#runSubagent\` call
+ * with `batch_lenses[]` and receives one `batch_results[]` response.
+ * From the dispatcher's perspective it is still one-shot (one call,
+ * one return). The subagent's internal lens sequencing is opaque to
+ * the dispatcher.
+ *
+ * Therefore: no `multi-shot batch` exception is needed; the existing
+ * one-shot rule continues to apply. If a future change ever exposes
+ * batch-mode as N separate sub-invocations from the parent, revisit
+ * this set or introduce a new `BATCH_ONE_SHOT_AGENT_NAMES` carve-out.
+ */
 const ONE_SHOT_AGENT_NAMES = new Set(["02-Requirements", "challenger-review-subagent"]);
 
 /** XML blocks that are Claude-only and forbidden in GPT agents. */
@@ -1036,8 +1121,6 @@ const WORKFLOW_HANDOFF_RULES = [
 /** B1a: agent names whose `handoffs[]` are skipped entirely as sources. */
 const HANDOFF_TARGET_EXCLUDED_SOURCES = new Set([
   "01-Orchestrator",
-  "01-Orchestrator (Fast Path)",
-  "01-Orchestrator-fastpath",
   "09-Diagnose",
   "11-Context Optimizer",
   "11-Context-Optimizer",
@@ -1085,11 +1168,27 @@ function buildArtifactProducerSet(graph, agents) {
 }
 
 /** Orchestrator-style agents that may dispatch the challenger-review subagent
- *  even when they don't produce artifacts directly. */
+ *  even when they don't produce artifacts directly.
+ *
+ *  Per Phase 12 (plan-simplifyChallengerReviews), every entry below is
+ *  documented with the reason it is allowed to dispatch the challenger.
+ *  Keep this list minimal — every new entry expands the set of agents
+ *  that can run adversarial review without owning an output artifact.
+ */
 const CHALLENGER_DISPATCHER_ALLOWLIST = new Set([
+  // 01-Orchestrator is the workflow conductor; it presents the
+  // "Run Challenger Review" handoff button at gates and is responsible
+  // for surfacing review findings to the user. It doesn't own a primary
+  // artifact — it dispatches to step agents who do.
   "01-Orchestrator",
-  "01-Orchestrator (Fast Path)",
+  // 10-Challenger is the standalone wrapper agent for ad-hoc adversarial
+  // reviews. Its entire purpose is to dispatch the challenger subagent.
+  // Retirement decision pending (see
+  // `tools/registry/challenger-effectiveness.md` + tracking issue per Phase 12).
   "10-Challenger",
+  // E2E Orchestrator runs the full pipeline unattended for benchmarks;
+  // it dispatches every step agent, including the challenger, on the
+  // user's behalf.
   "E2E Orchestrator",
 ]);
 
