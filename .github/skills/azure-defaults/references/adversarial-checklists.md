@@ -250,9 +250,67 @@ Merged from `security-governance` + `architecture-reliability` +
 - [ ] **Phased deployment** — for >5 resources or any data-plane
       service, the plan uses phased deployment with explicit phase
       ordering (foundation → security → data → compute → app → ops).
-- [ ] **Cost monitoring** — plan includes a `Microsoft.Consumption/budgets`
-      resource with thresholds at 80 %, 100 %, 120 % and parameterized
-      recipients.
+- [ ] **D-1 Cost monitoring — budget present** — plan emits a
+      Consumption Budget resource (`Microsoft.Consumption/budgets`
+      Bicep / `azurerm_consumption_budget_{rg,subscription,management_group}`
+      TF) at the Planner-declared `cost_monitoring_scope`. Skipped
+      only when `cost_monitoring_mode = deferred` (and D-7 verified).
+- [ ] **D-2 Cost monitoring — threshold contract** — notification
+      count is ≤5 and matches the contract: Actual 80% / 100% / 125%
+      + Forecast 100% / 125% (or the discovered governance override
+      in `04-governance-constraints.json` `cost_monitoring.thresholds`).
+- [ ] **D-3 Cost monitoring — recipient routing** — when
+      `cost_monitoring_mode ≠ minimal`, every notification block
+      carries both `contactRoles: ["Owner"]` AND `contactGroups:
+      [<actionGroupId>]` (Bicep) / `contact_roles` + `contact_groups`
+      (TF). When no human RBAC `Owner` exists at the scope, the
+      Owner-role fallback is satisfied (`cost_alert_emails` non-empty
+      AND Action Group has email receivers).
+- [ ] **D-4 Cost monitoring — Action Group mode** —
+      `decisions.cost_action_group_mode ∈ {create, existing}` is set
+      and the IaC matches: `existing` ⇒ Bicep `existing` keyword or
+      TF `data "azurerm_monitor_action_group"`, both reading the
+      `existing_action_group_id`. `create` ⇒ AVM module emits the AG
+      with one email receiver per `cost_alert_emails[]` entry.
+- [ ] **D-5 Cost monitoring — anomaly contract** — Bicep plan emits
+      `Microsoft.CostManagement/scheduledActions` (kind
+      `InsightAlert`, subscription-scoped, with `properties.viewId`,
+      `properties.notification.to = cost_alert_emails`, and
+      `properties.notificationEmail`); Terraform plan emits
+      `azurerm_cost_anomaly_alert` (subscription-scoped only, with
+      `email_addresses = cost_alert_emails`). RG-scope anomaly is
+      not expected (deferred).
+- [ ] **D-5a Cost monitoring — Bicep InsightAlert provider
+      constraints** (Bicep stack only; provider rejects at
+      what-if). All four must hold:
+      1. The module hosting `scheduledActions` declares
+         `targetScope = 'subscription'` and is called with
+         `scope: subscription()` from `main.bicep` — never nested
+         inside an RG-scoped module.
+      2. `properties.displayName` is ≤ 25 characters when fully
+         interpolated (verify against the resolved `project` /
+         `environment` values, not the template literal).
+      3. `properties.viewId` is a subscription-scope built-in
+         (`ms:DailyAnomalyByResource`,
+         `ms:DailyAnomalyBySubscription`, or `MS-DailyCosts`).
+         RG-scope views (e.g. `ms:DailyAnomalyByResourceGroup`) are
+         rejected.
+      4. `schedule.startDate` and `schedule.endDate` are UTC
+         midnight (`T00:00:00Z`) and `endDate − startDate` ≤ 1 year.
+         Hard-coded far-future dates (`2099-…`, `2036-…` with
+         non-midnight time) are rejected. Prefer
+         `utcNow('yyyy-MM-dd')` + `dateTimeAdd(..., 'P1Y', ...)`.
+      Cite `cost-alerts-bicep.md` §6 hard prerequisites.
+- [ ] **D-6 Cost monitoring — governance precedence** — any value in
+      `04-governance-constraints.json` `cost_monitoring.*` (thresholds,
+      required_scope, required_action_group_id, min_emails,
+      deferred_allowed) is reflected in the plan; merge is faithful.
+- [ ] **D-7 Cost monitoring — deferred exception** — when
+      `cost_monitoring_mode = deferred`, the plan's exceptions
+      section carries a `cost_monitoring_exception` record with
+      non-empty `rationale` and a future `expiry_date` (YYYY-MM-DD).
+      Environment must be `dev` or `sandbox`; reject for `prod` or
+      `staging`.
 - [ ] **Cost — RI / Savings-Plan math** — same rule as architecture
       lens; quantitative saving + breakeven calculation is shown for
       eligible workloads.
