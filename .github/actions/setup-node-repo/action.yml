@@ -1,0 +1,58 @@
+# Composite action: standard Node.js workflow prelude.
+#
+# IMPORTANT — local composite actions only resolve AFTER `actions/checkout`
+# has run in the calling job (the runner can't read `action.yml` from disk
+# before the repo is checked out). So this action deliberately does NOT
+# include the checkout step; every caller must run `actions/checkout@v6`
+# first. See https://github.com/actions/checkout#usage
+#
+# This action bundles the two steps that every Node-based job in
+# `.github/workflows/` was repeating after checkout:
+#   1. actions/setup-node (with npm cache)
+#   2. npm ci
+#
+# Bumping Node version or setup-node version is now a single-file edit
+# instead of a fan-out across every workflow.
+#
+# Use:
+#   - uses: actions/checkout@v6
+#   - uses: ./.github/actions/setup-node-repo
+#   # Or with a custom Node version / skipping npm ci:
+#   - uses: actions/checkout@v6
+#   - uses: ./.github/actions/setup-node-repo
+#     with:
+#       node-version: "22"
+#       install-deps: "false"
+#
+# Not used by:
+#   - governance-policy-baseline.yml — pwsh + azure/login, no Node
+#   - docs.yml — uses a non-root working-directory (site/)
+#   - branch-enforcement.yml — neither job needs Node
+#   - weekly-maintenance.yml drawio-* jobs — Deno/Python only
+
+name: Setup Node Repo
+description: Node.js setup + npm ci (shared workflow prelude — caller must check out repo first)
+
+inputs:
+  node-version:
+    description: Node.js major version (default 24)
+    required: false
+    default: "24"
+  install-deps:
+    description: Set to "false" to skip `npm ci` (e.g. matrix workflows that install per-job)
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Install Node dependencies
+      if: inputs.install-deps == 'true'
+      shell: bash
+      run: npm ci
