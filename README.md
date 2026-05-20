@@ -127,7 +127,22 @@ It is idempotent — safe to re-run.
 See the [Azure Setup documentation](https://jonathan-vella.github.io/azure-agentic-infraops/getting-started/azure-setup/)
 for headless mode, manual setup steps, and troubleshooting.
 
-### 5. Run the Maintenance Workflows
+### 5. Allow GitHub Actions to Create Pull Requests
+
+The maintenance workflows (step 6) open pull requests automatically when they
+detect drift. This requires one permission change in your repository settings.
+
+1. Go to your repository on GitHub
+2. Click **Settings → Actions → General**
+3. Scroll to **Workflow permissions**
+4. Check **Allow GitHub Actions to create and approve pull requests**
+5. Click **Save**
+
+> **Why:** GitHub disables this by default on all new repositories.
+> Without it, any workflow that opens a PR will fail with:
+> `GitHub Actions is not permitted to create or approve pull requests`
+
+### 6. Run the Maintenance Workflows
 
 After Azure setup completes, trigger the two scheduled maintenance workflows once
 so your repository has a fresh baseline before you start working. Both run weekly
