@@ -98,6 +98,7 @@ After running, review and commit:
 ```bash
 git --no-pager diff
 git add -A && git commit -m "chore: initialize from template"
+git push
 ```
 
 > **Expected diff:** You will see changes to `AGENTS.md`, `CONTRIBUTING.md`, and one or more
