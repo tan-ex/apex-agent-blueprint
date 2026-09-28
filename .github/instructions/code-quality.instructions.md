@@ -1,6 +1,6 @@
 ---
 description: "Code quality guidelines: commenting best practices (WHY not WHAT) and review priorities with security checks"
-applyTo: ".github/**/*.{js,mjs,cjs,ts,tsx,jsx,py,ps1,sh,bicep,tf}, tools/scripts/**/*.{js,mjs,cjs,ts,py,sh}, infra/**/*.{bicep,tf}, tools/mcp-servers/**/*.{py,ts,js,mjs}, site/**/*.{ts,mjs,js}"
+applyTo: ".github/**/*.{js,mjs,cjs,ts,tsx,jsx,py,ps1,sh,bicep,tf}, tools/scripts/**/*.{js,mjs,cjs,ts,py,sh}, infra/**/*.{bicep,tf}, tools/mcp-servers/**/*.{py,ts,js,mjs}"
 ---
 
 # Code Quality Instructions
@@ -69,13 +69,7 @@ Use standard annotation tags: `TODO`, `FIXME`, `HACK`, `NOTE`,
 
 **🟢 SUGGESTION** (Non-blocking): Readability, optimization, best practices, documentation
 
-### General Review Principles
-
-1. Be specific — reference exact lines with concrete examples
-2. Explain WHY + potential impact
-3. Suggest solutions, not just problems
-4. Be constructive and pragmatic
-5. Group related comments; recognize good practices
+Reference exact lines, explain why it matters, and suggest a fix.
 
 ### Security Review Checklist
 
@@ -96,13 +90,7 @@ Description. **Why this matters**: impact explanation.
 **Suggested fix**: code example if applicable.
 ```
 
-### Project Context
-
-- **IaC**: Azure Bicep (AVM-first), Terraform
-- **Scripts**: PowerShell 7+, Node.js (`.mjs`), bash, Python 3.14
-- **Build**: `npm run lint:md`, `npm run validate:all`
-- **Style**: Conventional Commits, 120-char lines, TLS 1.2+, managed identity
-
 ### Reference
 
-Detailed checklists: `.github/instructions/references/code-review-checklists.md`
+Project-specific checks (Azure baseline, validators, tests, agents, IaC):
+`.github/instructions/references/code-review-checklists.md`

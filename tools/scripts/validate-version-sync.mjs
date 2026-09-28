@@ -2,7 +2,7 @@
  * Version Synchronization Validator
  *
  * Ensures VERSION.md is the single source of truth and all other files match.
- * Checks: package.json, CHANGELOG.md
+ * Checks: package.json; archived changelogs are historical, not current version authorities.
  */
 
 import fs from "node:fs";
@@ -11,10 +11,7 @@ import { Reporter } from "./_lib/reporter.mjs";
 
 const ROOT = process.cwd();
 const VERSION_FILE = "VERSION.md";
-const FILES_TO_CHECK = [
-  { path: "package.json", pattern: /"version":\s*"(\d+\.\d+\.\d+)"/ },
-  { path: "CHANGELOG.md", pattern: /##\s*\[?v?(\d+\.\d+\.\d+)\]?/i },
-];
+const FILES_TO_CHECK = [{ path: "package.json", pattern: /"version":\s*"(\d+\.\d+\.\d+)"/ }];
 
 const r = new Reporter("Version Sync Validator");
 r.header();
@@ -32,7 +29,7 @@ if (!versionContent) {
   r.exitOnError();
 }
 
-const sourceVersion = versionContent.match(/(\d+\.\d+\.\d+)/)?.[1];
+const sourceVersion = versionContent.match(/^\*\*Current Version:\*\*\s*(\d+\.\d+\.\d+)\b/m)?.[1];
 if (!sourceVersion) {
   r.error(`Could not extract version from ${VERSION_FILE}`);
   r.summary();
@@ -45,11 +42,15 @@ for (const { path: filePath, pattern } of FILES_TO_CHECK) {
   r.tick();
   const content = readFile(filePath);
   if (!content) {
-    r.warn(`${filePath} not found (optional)`);
+    r.error(`${filePath} not found or empty`);
     continue;
   }
 
   const match = content.match(pattern);
+  if (!match) {
+    r.error(`Could not extract version from ${filePath}`);
+    continue;
+  }
   if (match) {
     const foundVersion = match[1];
     if (foundVersion === sourceVersion) {
