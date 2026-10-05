@@ -1,73 +1,32 @@
 ---
-description: Trigger conditions for updating documentation when code changes. Defines WHEN docs need updating — not HOW to write them (see docs.instructions.md and markdown.instructions.md for formatting).
+description: Required documentation updates for product changes; published documentation belongs to apex-docs.
 applyTo: "**/*.agent.md, **/.github/skills/**/SKILL.md, **/tools/scripts/*.mjs"
 ---
 
 # Update Documentation on Code Change
 
-## Purpose
-
-Detect when code changes require documentation updates. This instruction
-complements the existing documentation standards:
-
-- **docs.instructions.md** — content principles, architecture tables
-- **markdown.instructions.md** — formatting, line limits, validation
-- **docs-writer skill** — full doc maintenance workflows
+Required documentation updates do not depend on loading a skill. Apply these triggers during
+routine code work; formatting follows `markdown.instructions.md`. Published documentation is
+maintained in `jonathan-vella/apex-docs` (`src/content/docs/` in a separate checkout) — do not
+create or edit a local `site/` directory in APEX.
 
 ## Trigger Conditions
 
-Check if documentation updates are needed when any of these occur:
-
-### Always Trigger
-
-- New features or capabilities are added
-- Breaking changes are introduced
-- Installation or setup procedures change
-- CLI commands or scripts are added/modified
-- Dependencies or requirements change
-
-### Check and Update If Applicable
-
-- API endpoints, methods, or interfaces change
-- Configuration options or environment variables are modified
-- Code examples in documentation become outdated
+- New features or capabilities, breaking changes, setup or install changes
+- CLI commands or scripts added/modified; dependencies or requirements changed
+- Configuration options or environment variables modified; doc code examples outdated
 - Agent or skill definitions are added, renamed, or removed
+- Model assignments, invocation permissions, or Local / Agent Host entry points change
 - Bicep module structure changes (new modules, renamed parameters)
 
 ## What to Update
 
-### [README.md (root)](../../README.md)
-
-Update when:
-
-- New agents or skills are added (update tables and counts)
-- Project structure changes (update tree diagram)
-- New capabilities are introduced (update feature list)
-
-### [CHANGELOG.md](../../CHANGELOG.md)
-
-Update when:
-
-- Any user-facing change is made (follow Keep a Changelog format)
-- Use conventional commit type to determine section (Added, Changed,
-  Fixed, Removed, Deprecated, Security)
-
-### Site docs (`site/src/content/docs/`)
-
-Update when:
-
-- Agents or skills are added, renamed, or removed
-- Agent capabilities change significantly
-- New documentation files are added
-
-### docs-writer References
-
-Update when:
-
-- Instruction files are added or removed
-  (`references/repo-architecture.md` — instruction table and count)
-- Agent or skill inventory changes
-  (`references/freshness-checklist.md` — expected counts)
+| Target | Update when | Notes |
+| ------ | ----------- | ----- |
+| [README.md (root)](../../README.md) | Agent/skill inventory, project structure or capabilities change | Derive counts from `count-manifest.json` |
+| Release notes | Any user-facing change | Record in the PR and apex-docs; section by conventional-commit type |
+| apex-docs | Agents or skills added, renamed, removed or significantly changed; new doc files | Separate repository |
+| Runtime references | Instruction files added/removed; agent or skill inventory changes; entry points retired; harness behavior changes | Update callers and tests; regenerate the Explorer registry; keep historical evidence; distinguish Local prompt adapters from shared skills on Agent Host without cost-tier inference |
 
 ## Verification
 

@@ -40,7 +40,14 @@ import * as yaml from "js-yaml";
 import { getAgents } from "./_lib/workspace-index.mjs";
 import { getBody } from "./_lib/parse-frontmatter.mjs";
 import { MAX_BODY_LINES, REGISTRY_PATH, AGENT_OUTPUT_DIR } from "./_lib/paths.mjs";
-import { classifyModel, isClaude, isGptFamily } from "./validate-agents.mjs";
+import {
+  classifyModel,
+  claudeContractBlockIssues,
+  hasMixedBodyContractFamilies,
+  isClaude,
+  isGptFamily,
+  isGptOutcomeFamily,
+} from "./validate-agents.mjs";
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 // Hard limit (MAX_BODY_LINES) is imported from _lib/paths.mjs. The rest are
@@ -54,7 +61,7 @@ const DESCRIPTION_MAX_LEN = 350;
 const DESCRIPTION_WARN_LEN = 300;
 
 // Vendor-prompting reference sets (mirrored from validate-agents.mjs).
-const GPT55_REQUIRED_SECTIONS = ["# Goal", "# Success criteria", "# Constraints", "# Output", "# Stop rules"];
+const GPT_OUTCOME_SECTIONS = ["Goal", "Success criteria", "Constraints", "Output", "Stop rules"];
 const CLAUDE_ONLY_XML = [
   "<investigate_before_answering>",
   "<context_awareness>",
@@ -62,9 +69,22 @@ const CLAUDE_ONLY_XML = [
   "<empty_result_recovery>",
   "<subagent_budget>",
   "<output_contract>",
+  "<stop_conditions>",
 ];
 // Claude research agents expected to carry an investigate block (file-prefix match).
-const INVESTIGATE_AGENT_PREFIXES = ["03-architect", "05-iac-planner", "11-context-optimizer"];
+const INVESTIGATE_AGENT_PREFIXES = [
+  "03-architect",
+  "04-design",
+  "04g-governance",
+  "05-iac-planner",
+  "06b-bicep-codegen",
+  "06t-terraform-codegen",
+  "07b-bicep-deploy",
+  "07t-terraform-deploy",
+  "08-as-built",
+  "09-diagnose",
+  "11-context-optimizer",
+];
 // ONE-SHOT agents (frontmatter name) that must NOT carry an investigate block.
 const ONE_SHOT_AGENT_NAMES = new Set(["02-Requirements", "challenger-review-subagent"]);
 
@@ -152,8 +172,9 @@ function computeMetrics(agent) {
   const handoffs = structuredHandoffs(content);
   const skills = skillReads(body);
 
-  const gpt55Present = GPT55_REQUIRED_SECTIONS.filter((h) => new RegExp(`^${escapeRe(h)}\\b`, "m").test(body));
-  const gpt55Missing = GPT55_REQUIRED_SECTIONS.filter((h) => !gpt55Present.includes(h));
+  // Production agents use H2 contract sections; the validator also accepts H1.
+  const outcomePresent = GPT_OUTCOME_SECTIONS.filter((h) => new RegExp(`^#{1,2} ${escapeRe(h)}\\b`, "m").test(body));
+  const outcomeMissing = GPT_OUTCOME_SECTIONS.filter((h) => !outcomePresent.includes(h));
 
   return {
     total_lines: content.split("\n").length,
@@ -168,8 +189,8 @@ function computeMetrics(agent) {
     has_output_contract: body.includes("<output_contract>"),
     uses_apex_recall: /apex-recall/.test(body),
     reads_skill_md: skills.length > 0,
-    gpt55_sections_present: gpt55Present,
-    gpt55_sections_missing: gpt55Missing,
+    outcome_sections_present: outcomePresent,
+    outcome_sections_missing: outcomeMissing,
     model_family: family,
   };
 }
@@ -311,8 +332,21 @@ function scoreVendor(agent, metrics, vendorFindings) {
     evidence.push("ONE-SHOT agent must NOT include <investigate_before_answering> (claude-oneshot-001)");
     severity = worst(severity, "medium");
   }
-  if (family === "gpt-5.6-terra" && metrics.gpt55_sections_missing.length > 0) {
-    evidence.push(`Terra skeleton missing: ${metrics.gpt55_sections_missing.join(", ")} (gpt55-skeleton-001)`);
+  if (!agent.isSubagent && hasMixedBodyContractFamilies(agent.frontmatter?.model)) {
+    evidence.push("Model fallbacks mix Claude and non-Claude body contracts");
+    severity = worst(severity, "medium");
+  }
+  if (isClaude(family) && !agent.isSubagent) {
+    const issues = claudeContractBlockIssues(agent.content);
+    if (issues.length > 0) {
+      evidence.push(`Claude body contract incomplete: ${issues.join("; ")}`);
+      severity = worst(severity, "medium");
+    }
+  }
+  if (isGptOutcomeFamily(family) && !agent.isSubagent && metrics.outcome_sections_missing.length > 0) {
+    evidence.push(
+      `Outcome contract missing: ${metrics.outcome_sections_missing.join(", ")} (gpt-outcome-contract-001)`,
+    );
     severity = worst(severity, "medium");
   }
   if (isGptFamily(family)) {

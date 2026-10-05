@@ -14,6 +14,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  runVendorPrompting,
+  runFrontmatterValidation,
+  validateAgentPermissions,
+  validateProductionAgentBody,
+  getAgentBodyStructure,
+  FAMILY_STATUS,
+} from "../../scripts/validate-agents.mjs";
+import { parseFrontmatter } from "../../scripts/_lib/parse-frontmatter.mjs";
+import { getAgents } from "../../scripts/_lib/workspace-index.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.join(__dirname, "fixtures", "agents");
@@ -26,24 +36,36 @@ const PROMPT_FIXTURES = path.join(__dirname, "fixtures", "prompts");
 const EXPECTATIONS = {
   "fixture-good-claude.agent.md": {
     mustHave: [],
-    mustNotHave: ["claude-no-prefill-001", "handoff-enrichment-001", "frontmatter-model-style-001"],
+    mustNotHave: [
+      "claude-no-prefill-001",
+      "claude-reasoning-extraction-001",
+      "handoff-enrichment-001",
+      "frontmatter-model-style-001",
+    ],
   },
   "fixture-bad-claude.agent.md": {
-    mustHave: ["claude-no-prefill-001", "handoff-enrichment-001"],
+    mustHave: ["claude-no-prefill-001", "claude-reasoning-extraction-001", "handoff-enrichment-001"],
     mustNotHave: [],
   },
-  "fixture-good-gpt55.agent.md": {
+  "fixture-good-gpt.agent.md": {
     mustHave: [],
     mustNotHave: [
-      "gpt55-skeleton-001",
+      "gpt-outcome-contract-001",
       "gpt-no-claude-xml-001",
       "personality-scoping-001",
-      "gpt55-stop-rules-non-empty-001",
+      "gpt-stop-rules-non-empty-001",
+      "gpt-approval-repetition-001",
       "handoff-enrichment-001",
     ],
   },
-  "fixture-bad-gpt55.agent.md": {
-    mustHave: ["gpt55-skeleton-001", "gpt-no-claude-xml-001", "personality-scoping-001", "handoff-enrichment-001"],
+  "fixture-bad-gpt.agent.md": {
+    mustHave: [
+      "gpt-outcome-contract-001",
+      "gpt-no-claude-xml-001",
+      "personality-scoping-001",
+      "gpt-approval-repetition-001",
+      "handoff-enrichment-001",
+    ],
     mustNotHave: [],
   },
 };
@@ -66,33 +88,43 @@ const PROMPT_EXPECTATIONS = {
     mustNotHave: ["prompt-model-source-001"],
   },
   "fixture-bad-generic-agent-no-model.prompt.md": {
-    mustHave: ["prompt-model-source-001"],
-    mustNotHave: [],
+    mustHave: [],
+    mustNotHave: ["prompt-model-source-001", "frontmatter-model-style-001"],
   },
 };
 
-/**
- * Re-implement the per-agent dispatch loop from runVendorPrompting() but
- * scoped to a single file. This avoids forking the validator process and
- * lets us assert structured findings directly.
- */
-async function lintFixture(filePath) {
-  // The check functions are not exported; instead we run the validator
-  // module's internal logic by simulating a single-file invocation.
-  // For audit-grade fidelity we shell out to the CLI in JSON mode.
-  // Use spawnSync (not execFileSync) so a non-zero exit code (which is
-  // expected when bad fixtures fire error-severity rules like
-  // prompt-model-source-001) does not throw — we still need stdout.
-  const { spawnSync } = await import("node:child_process");
-  const result = spawnSync("node", ["tools/scripts/validate-agents.mjs", "--only=vendor-prompting", "--format=json"], {
-    encoding: "utf-8",
-    cwd: process.cwd(),
-  });
-  if (!result.stdout) {
-    throw new Error(`validate-agents.mjs produced no stdout (exit ${result.status}, stderr: ${result.stderr})`);
-  }
-  const parsed = JSON.parse(result.stdout);
-  return parsed.findings.filter((f) => f.file.endsWith(path.basename(filePath)));
+const catalog = {
+  models: Object.fromEntries(
+    [
+      "GPT-5.6-Terra",
+      "GPT-6-Sol",
+      "GPT-6-Luna",
+      "Claude Opus 5.5 (copilot)",
+      "Claude Sonnet 5.5 (copilot)",
+      "MAI-Code-1.1-Flash",
+    ].map((label) => [label, { deprecated: false }]),
+  ),
+};
+catalog.models["Retired-Model"] = { deprecated: true };
+
+const contract =
+  "# Role\nReviewer.\n# Goal\nReview.\n# Success criteria\nVerified.\n# Constraints\nRead only.\n# Output\nFindings.\n# Stop rules\nStop on missing evidence.";
+function item(frontmatter, body = contract, isSubagent = false) {
+  return { frontmatter, content: body, path: path.join(__dirname, "synthetic.md"), isSubagent };
+}
+function lint({ agents = new Map(), prompts = new Map() } = {}) {
+  return runVendorPrompting({ agents, prompts, catalog }).findings;
+}
+function lintFixture(filePath) {
+  const content = fs.readFileSync(filePath, "utf8");
+  const fixture = { content, frontmatter: parseFrontmatter(content), path: filePath };
+  if (filePath.endsWith(".agent.md")) return lint({ agents: new Map([[filePath, fixture]]) });
+  const target = fixture.frontmatter.agent;
+  const agents = new Map();
+  if (target && target !== "agent") agents.set("target", item({ name: target, model: ["Claude Opus 5.5 (copilot)"] }));
+  return lint({ agents, prompts: new Map([[filePath, fixture]]) }).filter((finding) =>
+    finding.file.endsWith(path.basename(filePath)),
+  );
 }
 
 for (const [fixture, exp] of Object.entries(EXPECTATIONS)) {
@@ -100,16 +132,7 @@ for (const [fixture, exp] of Object.entries(EXPECTATIONS)) {
     const filePath = path.join(FIXTURES, fixture);
     assert.ok(fs.existsSync(filePath), `Missing fixture: ${filePath}`);
 
-    // Stage the fixture into .github/agents/ for the live validator to pick up,
-    // run the validator, then clean up.
-    const stagedPath = path.join(".github/agents", fixture);
-    fs.copyFileSync(filePath, stagedPath);
-    let findings;
-    try {
-      findings = await lintFixture(stagedPath);
-    } finally {
-      fs.unlinkSync(stagedPath);
-    }
+    const findings = lintFixture(filePath);
 
     const ruleIds = new Set(findings.map((f) => f.ruleId));
     for (const must of exp.mustHave) {
@@ -129,16 +152,7 @@ for (const [fixture, exp] of Object.entries(PROMPT_EXPECTATIONS)) {
     const filePath = path.join(PROMPT_FIXTURES, fixture);
     assert.ok(fs.existsSync(filePath), `Missing fixture: ${filePath}`);
 
-    // Stage into .github/prompts/ so the live validator picks it up via
-    // getPromptFiles(); clean up regardless of test outcome.
-    const stagedPath = path.join(".github/prompts", fixture);
-    fs.copyFileSync(filePath, stagedPath);
-    let findings;
-    try {
-      findings = await lintFixture(stagedPath);
-    } finally {
-      fs.unlinkSync(stagedPath);
-    }
+    const findings = lintFixture(filePath);
 
     const ruleIds = new Set(findings.map((f) => f.ruleId));
     for (const must of exp.mustHave) {
@@ -152,3 +166,596 @@ for (const [fixture, exp] of Object.entries(PROMPT_EXPECTATIONS)) {
     }
   });
 }
+
+test("all fallback labels and families are checked, without weakening errors for MAI", () => {
+  const findings = lint({
+    agents: new Map([
+      [
+        "agent",
+        item({ model: ["MAI-Code-1.1-Flash", "GPT-6-Sol", "Retired-Model", "unlisted"] }, "prefill the assistant"),
+      ],
+    ]),
+  });
+  assert.ok(findings.some((finding) => finding.ruleId === "gpt-outcome-contract-001"));
+  assert.ok(findings.some((finding) => finding.ruleId === "model-deprecation-001"));
+  assert.ok(
+    findings.some((finding) => finding.ruleId === "frontmatter-model-style-001" && finding.severity === "error"),
+  );
+  const scalar = lint({ agents: new Map([["agent", item({ model: "MAI-Code-1.1-Flash" })]]) });
+  assert.ok(scalar.some((finding) => finding.severity === "error"));
+});
+
+test("ordinary labels are exact; platform-qualified handoff labels are allowed", () => {
+  for (const model of ["gpt-6-sol", "GPT-6-Sol ", "GPT-6-Sol (copilot)", false, null]) {
+    assert.ok(
+      lint({ agents: new Map([["agent", item({ model: [model] })]]) }).some((finding) => finding.severity === "error"),
+    );
+  }
+  const findings = lint({
+    agents: new Map([["agent", item({ model: ["GPT-6-Sol"], handoffs: [{ model: "GPT-5.6-Terra (copilot)" }] })]]),
+  });
+  assert.equal(findings.filter((finding) => finding.severity === "error").length, 0);
+});
+
+test("inherited custom prompt checks every family and generic picker inheritance is valid", () => {
+  const agents = new Map([["parent", item({ name: "Parent", model: ["GPT-6-Sol", "Claude Opus 5.5 (copilot)"] })]]);
+  const prompts = new Map([["prompt", item({ agent: "Parent" }, "prefill the assistant")]]);
+  assert.ok(lint({ agents, prompts }).some((finding) => finding.ruleId === "claude-no-prefill-001"));
+  for (const agent of [undefined, "agent", "ask", "edit", "plan"]) {
+    assert.equal(lint({ prompts: new Map([["prompt", item({ agent })]]) }).length, 0);
+  }
+  assert.ok(
+    lint({ prompts: new Map([["prompt", item({ agent: "Unknown" })]]) }).some(
+      (finding) => finding.ruleId === "prompt-model-source-001",
+    ),
+  );
+});
+
+test("leaf workers need a role contract, not main body sections or personality", () => {
+  for (const model of ["GPT-5.6-Terra", "GPT-6-Sol", "GPT-6-Luna"]) {
+    const good = item(
+      { model: [model] },
+      "# Reviewer\n## Inputs\nEvidence.\n## Outputs\nFindings. Return to parent on failure.",
+      true,
+    );
+    assert.equal(lint({ agents: new Map([["leaf", good]]) }).length, 0);
+    const bad = item({ model: [model] }, "# Reviewer\nDo things.", true);
+    assert.ok(
+      lint({ agents: new Map([["leaf", bad]]) }).some(
+        (finding) => finding.ruleId === "gpt-outcome-contract-001" && finding.severity === "warn",
+      ),
+    );
+  }
+});
+
+test("main outcome contracts require role and nonempty stop rules across GPT-6 and GPT-5.6 Terra", () => {
+  for (const model of ["GPT-5.6-Terra", "GPT-6-Sol", "GPT-6-Luna"]) {
+    const body = contract.replace("# Role\nReviewer.\n", "").replace("Stop on missing evidence.", "");
+    const findings = lint({ agents: new Map([["main", item({ model: [model] }, body)]]) });
+    assert.ok(findings.some((finding) => finding.ruleId === "gpt-outcome-contract-001" && finding.severity === "warn"));
+    assert.ok(
+      findings.some((finding) => finding.ruleId === "gpt-stop-rules-non-empty-001" && finding.severity === "warn"),
+    );
+  }
+});
+
+test("GPT-6 is enforced at default severity for model advice", () => {
+  for (const model of ["GPT-6-Sol", "GPT-6-Luna"]) {
+    const findings = lint({
+      agents: new Map([
+        ["main", item({ model: [model] }, `${contract}\n<context_awareness>Review.</context_awareness>`)],
+      ]),
+    });
+    assert.ok(findings.some((finding) => finding.ruleId === "gpt-no-claude-xml-001" && finding.severity === "warn"));
+  }
+});
+
+test("repeated approval phrases warn on GPT families only above the threshold", () => {
+  const approvals = "Ask first. Wait for user approval. Get approval. Do not mutate.";
+  for (const model of ["GPT-5.6-Terra", "GPT-6-Sol", "GPT-6-Luna"]) {
+    const noisy = lint({ agents: new Map([["main", item({ model: [model] }, `${contract}\n${approvals}`)]]) });
+    assert.ok(noisy.some((finding) => finding.ruleId === "gpt-approval-repetition-001" && finding.severity === "warn"));
+    const once = lint({ agents: new Map([["main", item({ model: [model] }, `${contract}\nAsk first.`)]]) });
+    assert.ok(!once.some((finding) => finding.ruleId === "gpt-approval-repetition-001"));
+  }
+  const claude = lint({ agents: new Map([["main", item({ model: ["Claude Opus 5.5 (copilot)"] }, approvals)]]) });
+  assert.ok(!claude.some((finding) => finding.ruleId === "gpt-approval-repetition-001"));
+  const widened = "Do not proceed until approved. Requires user approval. Stop for approval. Ask first.";
+  const flagged = lint({ agents: new Map([["main", item({ model: ["GPT-6-Sol"] }, `${contract}\n${widened}`)]]) });
+  assert.ok(flagged.some((finding) => finding.ruleId === "gpt-approval-repetition-001"));
+  const gates = "Gate 1 approval gate. Gate 2 approval gate. Gate 3 approval gate. Gate 4 approval gate.";
+  const named = lint({ agents: new Map([["main", item({ model: ["GPT-6-Sol"] }, `${contract}\n${gates}`)]]) });
+  assert.ok(!named.some((finding) => finding.ruleId === "gpt-approval-repetition-001"));
+});
+
+test("Opus 5.5 flags visible-reasoning instructions in agents and inherited prompts", () => {
+  for (const body of ["Think step by step.", "Think carefully before answering.", "Show your reasoning."]) {
+    const agent = lint({ agents: new Map([["main", item({ model: ["Claude Opus 5.5 (copilot)"] }, body)]]) });
+    assert.ok(
+      agent.some((finding) => finding.ruleId === "claude-reasoning-extraction-001"),
+      body,
+    );
+    const sonnet = lint({ agents: new Map([["main", item({ model: ["Claude Sonnet 5.5 (copilot)"] }, body)]]) });
+    assert.ok(!sonnet.some((finding) => finding.ruleId === "claude-reasoning-extraction-001"), body);
+    const gpt = lint({ agents: new Map([["main", item({ model: ["GPT-6-Sol"] }, `${contract}\n${body}`)]]) });
+    assert.ok(!gpt.some((finding) => finding.ruleId === "claude-reasoning-extraction-001"), body);
+  }
+  const agents = new Map([["parent", item({ name: "Parent", model: ["Claude Opus 5.5 (copilot)"] })]]);
+  const prompts = new Map([["prompt", item({ agent: "Parent" }, "Write out your reasoning.")]]);
+  assert.ok(lint({ agents, prompts }).some((finding) => finding.ruleId === "claude-reasoning-extraction-001"));
+});
+
+test("Sonnet 5.5 is a Claude family for general Claude rules", () => {
+  const findings = lint({
+    agents: new Map([["main", item({ model: ["Claude Sonnet 5.5 (copilot)"] }, "prefill the assistant")]]),
+  });
+  assert.ok(findings.some((finding) => finding.ruleId === "claude-no-prefill-001" && finding.severity === "warn"));
+  assert.ok(!findings.some((finding) => finding.ruleId === "gpt-outcome-contract-001"));
+  assert.ok(!findings.some((finding) => finding.severity === "error"));
+});
+
+test("GPT agents flag <stop_conditions> as Claude-only XML", () => {
+  const findings = lint({
+    agents: new Map([
+      ["main", item({ model: ["GPT-6-Luna"] }, `${contract}\n<stop_conditions>Stop.</stop_conditions>`)],
+    ]),
+  });
+  assert.ok(findings.some((finding) => finding.ruleId === "gpt-no-claude-xml-001"));
+});
+
+const claudeContract = [
+  "# Example",
+  "## Role",
+  "Own the step.",
+  "<scope_fencing>",
+  "Read-only upstream.",
+  "</scope_fencing>",
+  "<output_contract>",
+  "Write the artifact.",
+  "</output_contract>",
+  "<stop_conditions>",
+  "Stop at the approval gate.",
+  "</stop_conditions>",
+].join("\n");
+
+test("Claude production main agents use the Claude contract, not the six-H2 contract", () => {
+  const productionPath = path.resolve(__dirname, "../../../.github/agents/example.agent.md");
+  for (const model of ["Claude Opus 5.5 (copilot)", "Claude Sonnet 5.5 (copilot)"]) {
+    const agent = { frontmatter: { name: "Example", model: [model] }, content: claudeContract, path: productionPath };
+    assert.deepEqual(validateProductionAgentBody(agent), [], model);
+    for (const tag of ["scope_fencing", "output_contract", "stop_conditions"]) {
+      const open = `<${tag}>`;
+      const close = `</${tag}>`;
+      for (const broken of [
+        claudeContract.replace(new RegExp(`${open}\\n[^\\n]+\\n${close}`), ""),
+        claudeContract.replace(new RegExp(`${open}\\n[^\\n]+\\n`), `${open}\n<!-- empty -->\n`),
+        claudeContract.replace(
+          new RegExp(`${open}\\n[^\\n]+\\n${close}`),
+          `\x60\x60\x60text\n${open}\nx\n${close}\n\x60\x60\x60`,
+        ),
+        claudeContract.replace(new RegExp(`${open}\\n[^\\n]+\\n${close}`), `Inline \x60${open}x${close}\x60 mention.`),
+        claudeContract.replace(new RegExp(`${open}\\n[^\\n]+\\n${close}`), `<!-- ${open}disabled${close} -->`),
+        claudeContract.replace(new RegExp(`${open}\\n[^\\n]+\\n${close}`), `<!-- unterminated\n${open}\nx\n${close}`),
+      ]) {
+        assert.ok(
+          validateProductionAgentBody({ ...agent, content: broken }).some((issue) => issue.includes(`<${tag}>`)),
+          `${model}: ${tag}`,
+        );
+      }
+    }
+    const noRole = claudeContract.replace("## Role\nOwn the step.\n", "");
+    assert.ok(validateProductionAgentBody({ ...agent, content: noRole }).some((issue) => issue.includes("Role")));
+  }
+  const gpt = {
+    frontmatter: { name: "Example", model: ["GPT-6-Sol"] },
+    content: claudeContract,
+    path: productionPath,
+  };
+  assert.ok(validateProductionAgentBody(gpt).some((issue) => issue.includes("H2 Goal")));
+  for (const model of [
+    ["GPT-6-Sol", "Claude Opus 5.5 (copilot)"],
+    ["Claude Sonnet 5.5 (copilot)", "GPT-6-Luna"],
+  ]) {
+    const mixed = { ...gpt, frontmatter: { name: "Example", model } };
+    assert.ok(
+      validateProductionAgentBody(mixed).some((issue) => issue.includes("must not mix Claude")),
+      model.join(", "),
+    );
+  }
+});
+
+test("retired labels classify as unknown and fail catalog authorization", () => {
+  for (const model of ["Claude Opus 5", "Claude Sonnet 5", "GPT-5.6 Sol (copilot)", "GPT-5.5"]) {
+    const findings = lint({ agents: new Map([["agent", item({ model: [model] })]]) });
+    assert.ok(
+      findings.some((finding) => finding.ruleId === "frontmatter-model-style-001" && finding.severity === "error"),
+      model,
+    );
+  }
+});
+
+for (const heading of ["Role", "Goal", "Success criteria", "Constraints", "Output", "Stop rules"]) {
+  test(`H2 ${heading} must be present and substantive, not borrowed from the next section or a fence`, () => {
+    const normalized = contract.replace(/^# /gm, "## ");
+    const target = new RegExp(`^## ${heading}\\n[^\\n]*`, "m");
+    for (const model of ["GPT-5.6-Terra", "GPT-6-Sol", "GPT-6-Luna"]) {
+      for (const replacement of [
+        "",
+        `## ${heading}\n`,
+        `## ${heading}\n<!--\nNot content.\n-->`,
+        `## ${heading}\n### Empty child`,
+        `## ${heading}\n\x60\x60\x60text\n## Fake\nFake contract.\n\x60\x60\x60`,
+        `~~~markdown\n## ${heading}\nExample only.\n~~~`,
+      ]) {
+        const body = `# Reviewer\n${normalized.replace(target, replacement)}\n## Next section\nUnrelated content.`;
+        const findings = lint({ agents: new Map([["main", item({ model: [model] }, body)]]) });
+        assert.ok(
+          findings.some((finding) => finding.ruleId === "gpt-outcome-contract-001"),
+          `${model}: ${replacement}`,
+        );
+      }
+    }
+  });
+}
+
+test("output heading variants and H2 personality checks preserve enforcement", () => {
+  for (const heading of ["Output", "Outputs", "Output Contract", "Output Format"]) {
+    const body = contract.replace(/^# /gm, "## ").replace("## Output\n", `## ${heading}\n`);
+    const agent = item({ model: ["GPT-5.6-Terra"] }, `# Reviewer\n${body}`);
+    assert.equal(lint({ agents: new Map([["main", agent]]) }).length, 0);
+    agent.content += "\n## Personality\nBe friendly.";
+    assert.ok(
+      lint({ agents: new Map([["main", agent]]) }).some((finding) => finding.ruleId === "personality-scoping-001"),
+    );
+  }
+});
+
+test("leaf contracts reject empty or fenced inputs, outputs and failure rules", () => {
+  for (const body of [
+    "# Worker\n## Inputs\n## Outputs\nFindings. Return to parent.",
+    "# Worker\n## Inputs\nEvidence.\n## Outputs\n<!-- Empty -->\n## Failure\nReturn to parent.",
+    "# Worker\n~~~markdown\n## Inputs\nEvidence.\n## Outputs\nFindings. Return to parent.\n~~~",
+    "# Worker\n## Inputs\nEvidence.\n## Outputs\nFindings.\n```text\nReturn to parent.\n```",
+  ]) {
+    assert.ok(
+      lint({ agents: new Map([["leaf", item({ model: ["GPT-6-Luna"] }, body, true)]]) }).some(
+        (finding) => finding.ruleId === "gpt-outcome-contract-001",
+      ),
+    );
+  }
+});
+
+test("production title validation counts all real H1s but ignores fenced examples", () => {
+  const agent = item(
+    { name: "Example", model: ["MAI-Code-1.1-Flash"] },
+    `# Example\n${contract.replace(/^# /gm, "## ")}`,
+  );
+  agent.path = path.resolve(__dirname, "../../../.github/agents/example.agent.md");
+  for (const example of [
+    "```markdown\n# Example heading\n```",
+    "~~~markdown\n# Example heading\n~~~",
+    "````markdown\n```\n# Example heading\n````",
+  ]) {
+    const content = `${agent.content}\n${example}`;
+    assert.equal(getAgentBodyStructure(content).headings.filter((heading) => heading.level === 1).length, 1);
+    assert.deepEqual(validateProductionAgentBody({ ...agent, content }), []);
+  }
+  for (const extra of [
+    "# Role",
+    "# Unrecognized title",
+    "Extra title\n===========",
+    "> # Quoted title",
+    "   # Indented title",
+  ]) {
+    assert.ok(
+      validateProductionAgentBody({ ...agent, content: `${agent.content}\n\n${extra}` }).some((issue) =>
+        issue.includes("exactly one H1"),
+      ),
+      extra,
+    );
+  }
+  assert.ok(validateProductionAgentBody({ ...agent, content: agent.content.replace("# Example", "# Wrong") }).length);
+  assert.ok(validateProductionAgentBody({ ...agent, content: agent.content.replace("# Example\n", "") }).length);
+  assert.ok(validateProductionAgentBody({ ...agent, content: agent.content.replace("## Goal", "# Goal") }).length);
+  assert.deepEqual(
+    validateProductionAgentBody({
+      ...agent,
+      path: path.join(__dirname, "generic.agent.md"),
+      content: "# Generic\n# Platform-valid",
+    }),
+    [],
+  );
+});
+
+test("empty agents needs no tool; explicit allowlists override target disable-model-invocation", () => {
+  const target = item({ name: "Generic-Target", "disable-model-invocation": true });
+  const agents = new Map([["target", target]]);
+  assert.deepEqual(validateAgentPermissions({ agents: [], tools: ["read"], "disable-model-invocation": true }), []);
+  assert.deepEqual(validateAgentPermissions({ agents: ["Generic-Target"], tools: ["agent"] }, { agents }), []);
+  assert.ok(validateAgentPermissions({ agents: ["Generic-Target"], tools: ["read"] }, { agents }).length);
+  assert.ok(validateAgentPermissions({ agents: ["missing"], tools: ["agent"] }, { agents }).length);
+  for (const tools of [
+    ["agent"],
+    ["agent/runSubagent"],
+    ["functions/runSubagent"],
+    ["todo"],
+    ["functions/manage_todo_list"],
+    ["vscode/askQuestions"],
+    ["vscode"],
+    ["*"],
+    [false],
+  ]) {
+    assert.ok(validateAgentPermissions({ agents: [], tools }, { isSubagent: true }).length);
+  }
+  assert.ok(validateAgentPermissions({ agents: ["nested"], tools: ["read"] }, { isSubagent: true }).length);
+  assert.deepEqual(validateAgentPermissions({ agents: [], tools: ["read", "execute"] }, { isSubagent: true }), []);
+});
+
+test("shared authoring policy and family registry match the implemented contracts", () => {
+  const root = path.resolve(__dirname, "../../..");
+  const read = (filename) => fs.readFileSync(path.join(root, filename), "utf8");
+  const registry = JSON.parse(read(".github/skills/apex-vendor-prompting/rules.json"));
+  assert.deepEqual(Object.fromEntries(registry.families.map(({ family, status }) => [family, status])), FAMILY_STATUS);
+  for (const ruleId of ["gpt-outcome-contract-001", "gpt-stop-rules-non-empty-001", "gpt-no-claude-xml-001"]) {
+    const rule = registry.rules.find(({ id }) => id === ruleId);
+    assert.equal(rule.policy_origin, "repository-convention");
+    for (const family of ["gpt-6-sol", "gpt-6-luna", "gpt-5.6-terra"]) assert.ok(rule.model_families.includes(family));
+    assert.ok(registry.sources.some(({ id }) => id === rule.source_id));
+  }
+  for (const rule of registry.rules) {
+    assert.ok(
+      registry.sources.some(({ id }) => id === rule.source_id),
+      rule.id,
+    );
+    for (const family of rule.model_families) assert.ok(family === "any" || family in FAMILY_STATUS, rule.id);
+  }
+  const personality = registry.rules.find(({ id }) => id === "personality-scoping-001");
+  for (const family of ["gpt-6-sol", "gpt-6-luna"]) assert.ok(personality.model_families.includes(family));
+  const skill = read(".github/skills/apex-vendor-prompting/SKILL.md");
+  assert.doesNotMatch(skill, /audit:vendor-prompting|generate-skill-digests|FIRST entry|first entry decides/);
+  assert.match(skill, /node tools\/scripts\/fetch-vendor-prompting-guides\.mjs/);
+  assert.ok(fs.existsSync(path.join(root, "tools/scripts/fetch-vendor-prompting-guides.mjs")));
+  const authoring = read(".github/instructions/agent-authoring.instructions.md");
+  assert.match(authoring, /nonempty `agents` list requires/);
+  assert.match(authoring, /`agents: \[\]` does not/);
+  assert.match(authoring, /allowlists must not override/);
+  assert.match(authoring, /human handoff\s+to `10-Challenger`/);
+  assert.doesNotMatch(authoring, /first frontmatter model/);
+  const context = read(".github/instructions/context-optimization.instructions.md");
+  assert.match(context, /Do not infer runtime cost-tier eligibility/);
+  assert.match(context, /Shared skills inherit the caller's model\/tools/);
+  assert.doesNotMatch(context, /requires `<context_awareness>`|pool roughly\s+doubles/);
+  assert.doesNotMatch(read("tools/scripts/validate-agents.mjs"), /E2E Orchestrator|e2e-orchestrator/);
+});
+
+test("production reviewer policy forbids allowlist overrides and nested main wrappers", () => {
+  const root = path.resolve(__dirname, "../../..");
+  for (const filename of [
+    ".github/instructions/agent-authoring.instructions.md",
+    ".github/skills/apex-agent-authoring/references/runtime-guardrails.md",
+  ]) {
+    const content = fs.readFileSync(path.join(root, filename), "utf8").replace(/\s+/g, " ");
+    assert.match(content, /reviewer is unavailable, stop and request a human handoff to `10-Challenger`/, filename);
+    assert.match(
+      content,
+      /Missing or empty reviewer output permits exactly one identical-input retry, then stop and request a human handoff to `10-Challenger`/,
+      filename,
+    );
+    assert.match(content, /Never invoke a nested main-agent wrapper or fabricate an inline review/, filename);
+    assert.match(content, /caller allowlists must not override this production boundary/, filename);
+    assert.doesNotMatch(content, /allowlist can override|only (?:when|if) explicitly allowlisted/, filename);
+  }
+});
+
+test("production handoff and terminology guidance cannot revive retired E2E launch", () => {
+  const root = path.resolve(__dirname, "../../..");
+  const handoffs = fs.readFileSync(
+    path.join(root, ".github/skills/apex-workflow-engine/references/handoff-validation-rules.md"),
+    "utf8",
+  );
+  assert.match(handoffs, /E2E launch subsystem is retired/);
+  assert.doesNotMatch(handoffs, /E2E Orchestrator|handoffs SHOULD align/);
+  assert.match(handoffs, /explicit caller allowlists must not override/);
+  const blocklist = JSON.parse(fs.readFileSync(path.join(root, ".github/terminology-blocklist.json"), "utf8"));
+  const retired = blocklist.rules.find(({ id }) => id === "e2e-conductor-filename");
+  assert.ok(retired);
+  assert.match(retired.replacement, /remove retired E2E/);
+  for (const rule of blocklist.rules) {
+    assert.doesNotMatch(rule.replacement, /e2e-orchestrator|E2E Orchestrator/);
+  }
+});
+
+test("agent catalog and instructions preserve canonical models and human-selected harness boundaries", () => {
+  const root = path.resolve(__dirname, "../../..");
+  const authoring = fs.readFileSync(path.join(root, ".github/instructions/agent-authoring.instructions.md"), "utf8");
+  const runtime = fs.readFileSync(path.join(root, ".github/copilot-instructions.md"), "utf8");
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, ".github/model-catalog.json"), "utf8"));
+  const expectedModels = {
+    "01-orchestrator.agent.md": "MAI-Code-1.1-Flash",
+    "02-requirements.agent.md": "Claude Opus 5.5 (copilot)",
+    "03-architect.agent.md": "Claude Opus 5.5 (copilot)",
+    "04-design.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "04g-governance.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "05-iac-planner.agent.md": "Claude Opus 5.5 (copilot)",
+    "06b-bicep-codegen.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "06t-terraform-codegen.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "07b-bicep-deploy.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "07t-terraform-deploy.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "08-as-built.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "09-diagnose.agent.md": "Claude Sonnet 5.5 (copilot)",
+    "10-challenger.agent.md": "Claude Opus 5.5 (copilot)",
+    "11-context-optimizer.agent.md": "Claude Opus 5.5 (copilot)",
+    "bicep-validate-subagent.agent.md": "GPT-6 Luna (copilot)",
+    "bicep-whatif-subagent.agent.md": "GPT-6 Luna (copilot)",
+    "challenger-review-subagent.agent.md": "GPT-6 Luna (copilot)",
+    "cost-estimate-subagent.agent.md": "GPT-6 Luna (copilot)",
+    "policy-precheck-subagent.agent.md": "GPT-6 Luna (copilot)",
+    "terraform-plan-subagent.agent.md": "GPT-6 Luna (copilot)",
+    "terraform-validate-subagent.agent.md": "GPT-6 Luna (copilot)",
+  };
+  assert.match(authoring, /Agent frontmatter is the canonical model assignment/);
+  const agents = getAgents();
+  assert.deepEqual([...agents.keys()].sort(), Object.keys(expectedModels).sort());
+  for (const [filename, agent] of agents) {
+    const assignments = agent.isSubagent ? catalog.assignments.subagents : catalog.assignments.agents;
+    assert.equal(agent.frontmatter.model[0], expectedModels[filename], filename);
+    assert.equal(assignments[filename], agent.frontmatter.model[0], filename);
+    assert.ok(catalog.models[agent.frontmatter.model[0]], filename);
+  }
+  assert.match(runtime, /Local prompt files are adapters, not Agent Host entry points/);
+  assert.match(runtime, /Skills inherit the caller's model\/tools/);
+  assert.match(runtime, /allowlists\s+must not override that boundary/);
+});
+
+test("prompt and skill authoring distinguish Local adapters from Host execution", () => {
+  const root = path.resolve(__dirname, "../../..");
+  for (const filename of [
+    ".github/instructions/prompt.instructions.md",
+    ".github/instructions/agent-skills.instructions.md",
+  ]) {
+    const content = fs.readFileSync(path.join(root, filename), "utf8").replace(/\s+/g, " ");
+    assert.match(content, /Local prompt files are adapters, not Agent Host entry points/, filename);
+    assert.match(content, /explicitly select its owning main agent before consequential work/, filename);
+    assert.match(content, /Skills inherit the caller's model\/tools/, filename);
+    assert.match(content, /Keep needed Local discovery settings/, filename);
+  }
+});
+
+test("frontmatter validator accepts generic coordinators and explicitly allowlisted human targets", () => {
+  const target = item({
+    name: "Generic-Target",
+    description: "Review",
+    model: ["GPT-5.6-Terra"],
+    tools: ["read"],
+    agents: [],
+    "user-invocable": true,
+    "disable-model-invocation": true,
+  });
+  const main = item({
+    name: "Generic-Coordinator",
+    description: "Route",
+    model: ["MAI-Code-1.1-Flash"],
+    tools: ["read"],
+    agents: [],
+    "user-invocable": true,
+    "disable-model-invocation": true,
+  });
+  const agents = new Map([
+    ["main", main],
+    ["target", target],
+  ]);
+  assert.equal(runFrontmatterValidation({ agents }).errors, 0);
+  main.frontmatter.agents = ["Generic-Target"];
+  main.frontmatter.tools.push("agent");
+  assert.equal(runFrontmatterValidation({ agents }).errors, 0);
+  main.frontmatter.tools = ["read"];
+  assert.ok(runFrontmatterValidation({ agents }).errors > 0);
+  main.frontmatter.agents = [];
+  main.frontmatter.tools = false;
+  assert.ok(runFrontmatterValidation({ agents }).errors > 0);
+});
+
+function productionFleet() {
+  return structuredClone(getAgents());
+}
+
+function productionFindings(agents) {
+  return runFrontmatterValidation({ agents }).findings.filter(
+    (finding) => finding.ruleId === "production-agent-policy" && finding.severity === "error",
+  );
+}
+
+test("production names outside the production directories retain generic platform semantics", () => {
+  const agents = new Map(
+    ["01-Orchestrator", "10-Challenger"].map((name) => {
+      const agent = item({
+        name,
+        description: "Generic fixture",
+        model: ["MAI-Code-1.1-Flash"],
+        tools: ["agent"],
+        agents: ["10-Challenger"],
+        "user-invocable": true,
+        "disable-model-invocation": false,
+      });
+      agent.path = path.join(__dirname, "fixtures", ".github", "agents", `${name}.agent.md`);
+      return [name, agent];
+    }),
+  );
+  agents.get("10-Challenger").frontmatter["disable-model-invocation"] = true;
+  assert.equal(runFrontmatterValidation({ agents }).errors, 0);
+});
+
+test("production frontmatter accepts the current fleet and human handoffs", () => {
+  assert.equal(runFrontmatterValidation({ agents: productionFleet() }).errors, 0);
+});
+
+test("production main agents require disable-model-invocation true", () => {
+  for (const [filename, agent] of productionFleet()) {
+    if (agent.isSubagent) continue;
+    for (const value of [false, undefined, "true"]) {
+      const agents = productionFleet();
+      const frontmatter = agents.get(filename).frontmatter;
+      if (value === undefined) delete frontmatter["disable-model-invocation"];
+      else frontmatter["disable-model-invocation"] = value;
+      assert.ok(
+        productionFindings(agents).some(
+          (finding) => finding.file === agent.path && /require disable-model-invocation: true/.test(finding.message),
+        ),
+        `${agent.frontmatter.name}: ${value}`,
+      );
+    }
+  }
+});
+
+test("production callers cannot allowlist any main agent or wildcard, despite generic platform permission", () => {
+  const targets = [...productionFleet().values()].filter((agent) => !agent.isSubagent);
+  for (const [filename, caller] of productionFleet()) {
+    for (const target of [...targets.map((agent) => agent.frontmatter.name), "*"]) {
+      const agents = productionFleet();
+      const frontmatter = agents.get(filename).frontmatter;
+      frontmatter.agents = [target];
+      frontmatter.tools = ["agent"];
+      assert.deepEqual(validateAgentPermissions(frontmatter, { agents }), []);
+      assert.ok(
+        productionFindings(agents).some(
+          (finding) =>
+            finding.file === caller.path &&
+            finding.message === `Production agents cannot allowlist main agents or wildcard targets (got: ${target})`,
+        ),
+        `${caller.frontmatter.name} -> ${target}`,
+      );
+    }
+  }
+});
+
+test("production Orchestrator requires an explicit empty allowlist and no delegation tools", () => {
+  const worker = [...productionFleet().values()].find((agent) => agent.isSubagent).frontmatter.name;
+  for (const override of [
+    { agents: undefined },
+    { agents: [worker], tools: ["agent"] },
+    ...["agent", "agent/runSubagent", "functions/runSubagent", "*"].map((tool) => ({ tools: [tool] })),
+  ]) {
+    const agents = productionFleet();
+    const main = [...agents.values()].find((agent) => agent.frontmatter.name === "01-Orchestrator");
+    Object.assign(main.frontmatter, override);
+    if (override.agents === undefined && "agents" in override) delete main.frontmatter.agents;
+    assert.ok(productionFindings(agents).length > 0, JSON.stringify(override));
+  }
+});
+
+test("production workers remain hidden leaves", () => {
+  for (const override of [
+    { "user-invocable": true },
+    { "user-invocable": undefined },
+    { agents: ["*"] },
+    { agents: undefined },
+    ...["agent", "agent/runSubagent", "functions/runSubagent", "todo", "vscode/askQuestions", "*"].map((tool) => ({
+      tools: [tool],
+    })),
+  ]) {
+    const agents = productionFleet();
+    const worker = [...agents.values()].find((agent) => agent.isSubagent);
+    Object.assign(worker.frontmatter, override);
+    assert.ok(productionFindings(agents).length > 0, JSON.stringify(override));
+  }
+});
