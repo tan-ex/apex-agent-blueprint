@@ -5,22 +5,17 @@ applyTo: "**/*.bicep"
 
 # Bicep Best Practices
 
-Region, tags, AVM-first mandate, unique suffix, and security baseline
-are defined in `AGENTS.md` (always loaded). This file covers Bicep-specific
-patterns. Policy constraints (`04-governance-constraints.md`) always take precedence.
+Azure values are canonical in [Copilot instructions](../copilot-instructions.md#azure-defaults-canonical);
+shared naming, AVM, and security procedures live in [apex-azure-defaults](../skills/apex-azure-defaults/SKILL.md).
+This file covers Bicep-specific patterns. Discovered policy constraints always take precedence.
 
-## Security
+## Policy and Security
 
 Azure Policy always wins. Code adapts to policy, never the reverse.
-See `references/iac-security-baseline.md` for shared security rules and
-`references/iac-policy-compliance.md` for the full policy compliance workflow.
-
-## Policy Compliance
-
-Cross-reference `04-governance-constraints.json` before writing templates.
-For Deny policies, prefer `azurePropertyPath`; fall back to `bicepPropertyPath`.
-See `references/iac-policy-compliance.md` for the full checklist and Bicep
-translation rules.
+Cross-reference `04-governance-constraints.json` before writing templates; for Deny policies
+prefer `azurePropertyPath` and fall back to `bicepPropertyPath`. Shared rules:
+`references/iac-security-baseline.md` (security, networking, diagnostics) and
+`references/iac-policy-compliance.md` (checklist, dynamic tags, Bicep translation).
 
 ## Naming
 
@@ -31,6 +26,9 @@ translation rules.
 | SQL Server | 63  | `sql-{project}-{env}-{suffix}` | `sql-contoso-dev-abc123` |
 
 Use lowerCamelCase for parameters, variables, resources, modules.
+Avoid symbols named `resourceGroup`, `subscription`, `managementGroup`, `tenant`, `az` or `sys` when those
+functions/namespaces are used. Prefer role-specific names such as `projectResourceGroup`; rename all references
+together. Scope-function shadowing is a source defect, not a missing-module error that can be deferred.
 
 ## Unique Names
 
@@ -42,36 +40,29 @@ Pass to all modules. Use `take()` for length-constrained resources.
 Use AVM modules (`br/public:avm/res/{service}/{resource}:{version}`) for all
 resources where one exists. Raw Bicep only when no AVM exists and user approves.
 
-**Pin to the latest published stable version**, resolved at plan time:
-
-```bash
-curl -sf https://mcr.microsoft.com/v2/bicep/avm/res/{path}/tags/list \
-  | jq -r '.tags[]' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
-```
-
-Or use the `mcp_bicep_list_avm_metadata` MCP helper. Never copy a version
-from `azure-defaults/references/avm-modules.md` — versions are
-intentionally stripped from that table. The shared stale-pin exception and
-freeze policy lives in [`azure-defaults`](../skills/azure-defaults/SKILL.md).
+**Pin to the latest published stable version**, resolved at plan time through MCR tags or
+the `mcp_bicep_list_avm_metadata` MCP helper (procedure and stale-pin/freeze policy in
+[`apex-azure-defaults`](../skills/apex-azure-defaults/SKILL.md)). Never copy a version
+from `apex-azure-defaults/references/avm-modules.md` — versions are intentionally stripped.
 
 ## Module Outputs
 
 Every module outputs: `resourceId`, `resourceName`, `principalId` (if identity exists).
+For a resource-group ID at subscription scope, use
+`subscriptionResourceId('Microsoft.Resources/resourceGroups', resourceGroupName)`; do not omit the resource type.
+Constructed IDs and module declaration order do not establish dependencies. Preserve approved prerequisite edges
+in both phased and `all` deployments; prefer symbolic outputs, or explicit `dependsOn` when IDs must remain phase-safe.
 
 ## Diagnostic Settings
 
-Pass resource names (not IDs) to diagnostic modules. Use `existing` keyword
-for symbolic references inside the diagnostic module.
+Pass resource and workspace names (not IDs) to modules; resolve IDs with `existing`
+inside the module. Coverage requirements: `references/iac-security-baseline.md`.
 
-## Cost Monitoring
+## Cost Monitoring and Repeatability
 
-Every deployment includes a budget module. See `references/iac-cost-monitoring.md`.
-
-## Repeatability
-
-Zero hardcoded project-specific values. `projectName` parameter has no default.
-All tag values reference parameters. See `references/iac-policy-compliance.md`
-for the dynamic tag list rule.
+Every deployment includes a budget module (`references/iac-cost-monitoring.md`).
+Zero hardcoded project-specific values: `projectName` has no default and tag values
+reference parameters (dynamic tag rule in `references/iac-policy-compliance.md`).
 
 ## Anti-Patterns
 
@@ -79,7 +70,7 @@ for the dynamic tag list rule.
 | ---------------------- | ------------------------------- |
 | Hardcoded names        | Use `uniqueString()` suffix     |
 | Missing `@description` | Document all parameters         |
-| Explicit `dependsOn`   | Use symbolic references         |
+| Redundant `dependsOn` | Prefer symbolic outputs; add explicit edges when constructed IDs hide dependencies |
 | Resource ID for scope  | Use `existing` + names          |
 | S1 for zone redundancy | Use P1v3+                       |
 | Raw Bicep (no AVM)     | Use AVM modules or get approval |
@@ -93,9 +84,5 @@ bicep build main.bicep && bicep lint main.bicep
 
 ## Cross-References
 
-- Policy compliance: `references/iac-policy-compliance.md`
-- Security baseline: `references/iac-security-baseline.md`
-- Cost monitoring: `references/iac-cost-monitoring.md`
 - Governance discovery: `.github/instructions/governance-discovery.instructions.md`
-- Azure defaults: `.github/skills/azure-defaults/SKILL.md`
-- Bicep patterns skill: `.github/skills/azure-bicep-patterns/SKILL.md`
+- Bicep patterns skill: `.github/skills/apex-azure-bicep-patterns/SKILL.md`

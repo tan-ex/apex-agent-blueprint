@@ -3,14 +3,65 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
-from ..indexer import _parse_json_safe, ensure_fresh
+from ..indexer import classify_artifact, extract_step
+from ..risk_gate import ACTIONS, evaluate_gate
+from ..state_writer import check_state_revision, read_state, session_state_path
+from .complete_step import (
+    _CHALLENGER_GATE,
+    _challenger_findings_invalid,
+    _challenger_findings_missing,
+    _review_paths,
+    _select_replacement_review,
+    review_verdict,
+    watch_review_inputs,
+)
+
+
+class ProjectInventory:
+    """Read-only adapter for the existing show presentation; never opens the index."""
+
+    def __init__(self, project):
+        self.primary = session_state_path(project)
+        self.rows = []
+
+    def execute(self, query, params):
+        if "SELECT content" in query:
+            self.rows = [(json.dumps(read_state(self.primary)),)] if self.primary.exists() else []
+        else:
+            self.rows = []
+            for artifact in sorted(self.primary.parent.rglob("*")):
+                if (
+                    artifact.is_file()
+                    and not artifact.is_symlink()
+                    and not artifact.name.startswith(".")
+                    and artifact.suffix not in (".bak", ".lock", ".tmp")
+                ):
+                    self.rows.append(
+                        (
+                            str(artifact.relative_to(self.primary.parent.parent.parent)),
+                            classify_artifact(artifact.name),
+                            extract_step(artifact.name),
+                            artifact.stat().st_mtime,
+                        )
+                    )
+        return self
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self):
+        return self.rows
+
+    def close(self):
+        pass
 
 
 def run(args) -> int:
     """Full context dump for one project: decisions, findings, current step, key artifacts."""
     project = args.project
-    conn = ensure_fresh()
+    conn = ProjectInventory(project)
     try:
         # Get session state
         row = conn.execute(
@@ -19,8 +70,9 @@ def run(args) -> int:
         ).fetchone()
 
         session = {}
-        if row:
-            data = _parse_json_safe(row[0])
+        primary = session_state_path(project)
+        if row or primary.exists():
+            data = read_state(primary)
             if data and isinstance(data, dict):
                 session = {
                     "current_step": data.get("current_step", 0),
@@ -36,7 +88,108 @@ def run(args) -> int:
                     # never iterates over null. Schema documented in
                     # tools/apex-recall/docs/show-schema.md.
                     "steps": data.get("steps", {}),
+                    "review_selections": data.get("review_selections", {}),
+                    "metadata": data.get("metadata", {}),
+                    "review_attempts": data.get("review_attempts", []),
+                    "risk_authorizations": data.get("risk_authorizations", {}),
                 }
+                effective = {}
+                exception_bearing = bool(data.get("risk_authorizations"))
+                review_steps = set(data.get("review_selections", {}))
+                if exception_bearing:
+                    review_steps |= {
+                        step
+                        for step, (artifact, _) in _CHALLENGER_GATE.items()
+                        if (primary.parent / artifact).is_file()
+                    }
+                for step in sorted(review_steps):
+                    try:
+                        selected, selection = _select_replacement_review(project, step, SimpleNamespace(), data)
+                        watch_review_inputs(data, project, step, selected)
+                        if selection and data.input_revisions[selected] != selection["stored"]["sha256"]:
+                            raise ValueError("Selected review changed during validation")
+                        if step == "4" and exception_bearing:
+                            missing, _, _ = _challenger_findings_missing(project, step, selected)
+                            if missing:
+                                skip_result = evaluate_gate(project, data, "plan-complete", selected=selected)
+                                if skip_result.get("review_skip"):
+                                    effective[step] = {
+                                        "status": "current",
+                                        "gate_status": "current",
+                                        "review_skip": True,
+                                        "unresolved_findings": [],
+                                        "review_verdicts": [],
+                                    }
+                                    continue
+                            error = (
+                                "Plan review missing"
+                                if missing
+                                else _challenger_findings_invalid(project, step, selected, True)
+                            )
+                            if error:
+                                raise ValueError(error)
+                            reviews = [
+                                (sidecar, json.loads(sidecar.read_text()))
+                                for _, sidecar in _review_paths(project, step, selected)
+                            ]
+                            unresolved = [
+                                {
+                                    "review": str(sidecar),
+                                    "id": finding["id"],
+                                    "severity": "must_fix",
+                                    "disposition": "unresolved",
+                                    "owner": "artifact owner",
+                                    "residual_impact": finding["impact"],
+                                }
+                                for sidecar, review in reviews
+                                for finding in review["findings"]
+                                if finding["severity"] == "must_fix"
+                            ]
+                            try:
+                                result = evaluate_gate(project, data, "plan-complete", selected=selected)
+                            except (OSError, ValueError) as gate_error:
+                                result = {
+                                    "status": "blocked",
+                                    "error": str(gate_error),
+                                    "unresolved_findings": unresolved,
+                                }
+                            effective[step] = {
+                                "status": "current",
+                                "gate_status": result["status"],
+                                "unresolved_findings": result["unresolved_findings"],
+                                "review_verdicts": [review_verdict(review) for _, review in reviews],
+                                "gate_error": result.get("error"),
+                                "input_coverage": "primary-and-review-guidance",
+                            }
+                            continue
+                        missing, _, _ = _challenger_findings_missing(project, step, selected)
+                        error = (
+                            "Selected review missing"
+                            if missing
+                            else _challenger_findings_invalid(project, step, selected)
+                        )
+                        check_state_revision(data, primary)
+                        effective[step] = {
+                            "status": "invalid" if error else "current",
+                            "error": error,
+                            "input_coverage": "primary-and-review-guidance",
+                        }
+                    except (OSError, ValueError) as error:
+                        effective[step] = {"status": "invalid", "error": str(error)}
+                session["effective_reviews"] = effective
+                readiness = {}
+                if exception_bearing:
+                    review_cache: dict = {}
+                    for action in ACTIONS:
+                        try:
+                            result = evaluate_gate(project, data, action, review_cache=review_cache)
+                            readiness[action] = {
+                                key: value for key, value in result.items() if key not in ("record", "watched_inputs")
+                            }
+                        except (OSError, ValueError) as error:
+                            readiness[action] = {"status": "blocked", "error": str(error)}
+                session["gate_readiness"] = readiness
+                check_state_revision(data, primary)
 
         # Get all artifacts for this project
         artifacts = conn.execute(
@@ -46,16 +199,14 @@ def run(args) -> int:
             (project,),
         ).fetchall()
 
-        artifact_list = [
-            {"file": a[0], "type": a[1], "step": a[2], "modified": a[3]}
-            for a in artifacts
-        ]
+        artifact_list = [{"file": a[0], "type": a[1], "step": a[2], "modified": a[3]} for a in artifacts]
 
         result = {
             "project": project,
             "session": session,
             "artifacts": artifact_list,
             "artifact_count": len(artifact_list),
+            "state_status": "present" if session else "missing",
         }
 
         if args.json:

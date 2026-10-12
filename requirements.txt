@@ -2,8 +2,7 @@
 # Install with: pip install -r requirements.txt
 # Note: graphviz system package required (apt-get install graphviz)
 #
-# Additional component-specific requirements:
-#   - scenarios/S04-*/solution/app/requirements.txt  (FastAPI validation app)
+# The independently packaged recall CLI declares its dependencies in tools/apex-recall/pyproject.toml.
 #
 # The devcontainer post-create.sh handles all installations automatically.
 
@@ -11,9 +10,10 @@
 diagrams==0.25.1
 
 # Image processing (required by diagrams for PNG generation)
-matplotlib==3.11.1
+matplotlib==3.11.2
 pillow==12.3.0
 
 # Repository test and lint tooling
 pytest==9.1.1
-ruff==0.16.0
+ruff==0.16.10
+yamllint==1.38.0

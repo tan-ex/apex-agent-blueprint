@@ -31,8 +31,6 @@ desktop.ini
 # Logs
 *.log
 logs/
-# Astro docs review audit trail is committable
-!logs/copilot/docs-review/
 
 # Root decision snapshots are generated artifacts, not source files.
 decisions*.json
@@ -77,6 +75,7 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+*.egg-info/
 
 # Test results
 TestResults/
@@ -97,11 +96,6 @@ freshness-report.json
 # that single committed deliverables can be re-included with `!`.
 agent-output/_baselines/*
 
-# Astro Starlight (site/ is source code; only ignore build artifacts)
-site/dist/
-site/node_modules/
-site/.astro/
-
 # Terraform
 *.tfstate
 *.tfstate.backup
@@ -120,7 +114,7 @@ crash.*.log
 .github/data/governance-policy-raw.json
 
 # Vendor-prompting raw fetched snapshots (committed canonical prose lives one level up)
-.github/skills/vendor-prompting/references/.snapshots/
+.github/skills/apex-vendor-prompting/references/.snapshots/
 
 # ESLint + Prettier caches
 .eslintcache

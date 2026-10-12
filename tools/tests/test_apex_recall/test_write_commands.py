@@ -85,7 +85,9 @@ class TestStartStep:
 
     def test_governance_step_3_5(self, workspace: Path):
         _run(workspace, ["init", "sp", "--json"])
-        rc, out = _run(workspace, ["start-step", "sp", "3_5", "--json"])
+        rc, _ = _run(workspace, ["start-step", "sp", "3_5", "--json"])
+        assert rc == 2
+        rc, out = _run(workspace, ["start-step", "sp", "3_5", "--allow-out-of-order", "test setup", "--json"])
         assert rc == 0
         assert json.loads(out)["step"] == "3_5"
 
@@ -372,7 +374,12 @@ class TestAtomicWrite:
         # Corrupt the primary file
         primary = workspace / "agent-output" / "bak" / "00-session-state.json"
         primary.write_text("{bad json///")
-        # Next command should recover from .bak
+        rc, out = _run(workspace, ["complete-step", "bak", "1", "--json"])
+        assert rc == 1
+        assert primary.read_text() == "{bad json///"
+        rc, out = _run(workspace, ["recover-state", "bak", "--reason", "Explicit fixture recovery", "--json"])
+        assert rc == 0
+        assert json.loads(out)["outcome"] == "recovered"
         rc, out = _run(workspace, ["complete-step", "bak", "1", "--json"])
         assert rc == 0
         assert json.loads(out)["status"] == "complete"

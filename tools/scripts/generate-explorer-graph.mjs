@@ -4,7 +4,7 @@
  *
  * Scans the repo for agents, subagents, skills, instructions, prompts, MCP
  * servers, validators, and CI workflows. Emits a single JSON file at
- * `site/public/architecture-explorer-graph.json` consumed by the interactive
+ * `tools/registry/architecture-explorer-graph.json` exported to the interactive
  * Cytoscape-based explorer.
  *
  * Counts are computed from disk; the explorer UI reads them at runtime so no
@@ -25,9 +25,11 @@
  *  - skill → skill (parse SKILL.md for references to other skill slugs)
  */
 
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { join, basename, relative, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { format, resolveConfig } from "prettier";
 import { parseFrontmatter } from "./_lib/parse-frontmatter.mjs";
 import { expandScript } from "./_lib/npm-script-graph.mjs";
 import { extractSkillReferences } from "./_lib/skill-references.mjs";
@@ -35,7 +37,7 @@ import { readJson } from "./_lib/json.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const REPO_ROOT = resolve(dirname(__filename), "../..");
-const OUT_PATH = join(REPO_ROOT, "site/public/architecture-explorer-graph.json");
+const DEFAULT_OUTPUT = join(REPO_ROOT, "tools/registry/architecture-explorer-graph.json");
 
 const GITHUB_BASE = "https://github.com/jonathan-vella/apex/blob/main/";
 const _DOCS_BASE = "/";
@@ -107,9 +109,9 @@ const CATEGORIES = [
   },
 ];
 
-function listFiles(dir, filter) {
+function listFiles(dir, filter, recursive = false) {
   try {
-    return readdirSync(dir)
+    return readdirSync(dir, { recursive })
       .filter(filter)
       .map((f) => join(dir, f))
       .filter((f) => statSync(f).isFile());
@@ -132,8 +134,17 @@ function asArray(v) {
 
 // ---------- Node collectors ----------
 
-function collectAgents() {
-  const dir = join(REPO_ROOT, ".github/agents");
+function invocationMetadata(frontmatter) {
+  return {
+    invocable: frontmatter["user-invocable"] ?? true,
+    disableModelInvocation: frontmatter["disable-model-invocation"] ?? false,
+    argumentHint: frontmatter["argument-hint"] ?? null,
+    context: frontmatter.context ?? null,
+  };
+}
+
+export function collectAgents(root = REPO_ROOT) {
+  const dir = join(root, ".github/agents");
   const files = listFiles(dir, (f) => f.endsWith(".agent.md"));
   return files.map((path) => {
     const content = readFileSync(path, "utf8");
@@ -144,13 +155,13 @@ function collectAgents() {
       category: "agent",
       label: name,
       description: fm.description || "",
-      path: relative(REPO_ROOT, path),
+      path: relative(root, path),
       links: {
-        source: GITHUB_BASE + relative(REPO_ROOT, path),
+        source: GITHUB_BASE + relative(root, path),
       },
       meta: {
         model: asArray(fm.model)[0] || null,
-        invocable: fm["user-invocable"] !== "false",
+        ...invocationMetadata(fm),
         subagents: asArray(fm.agents),
         handoffTargets: extractHandoffAgents(content),
         skills: extractSkillReferences(content),
@@ -159,8 +170,8 @@ function collectAgents() {
   });
 }
 
-function collectSubagents() {
-  const dir = join(REPO_ROOT, ".github/agents/_subagents");
+export function collectSubagents(root = REPO_ROOT) {
+  const dir = join(root, ".github/agents/_subagents");
   const files = listFiles(dir, (f) => f.endsWith(".agent.md"));
   return files.map((path) => {
     const content = readFileSync(path, "utf8");
@@ -171,15 +182,19 @@ function collectSubagents() {
       category: "subagent",
       label: name,
       description: fm.description || "",
-      path: relative(REPO_ROOT, path),
-      links: { source: GITHUB_BASE + relative(REPO_ROOT, path) },
-      meta: { model: asArray(fm.model)[0] || null, skills: extractSkillReferences(content) },
+      path: relative(root, path),
+      links: { source: GITHUB_BASE + relative(root, path) },
+      meta: {
+        model: asArray(fm.model)[0] || null,
+        ...invocationMetadata(fm),
+        skills: extractSkillReferences(content),
+      },
     };
   });
 }
 
-function collectSkills() {
-  const skillsDir = join(REPO_ROOT, ".github/skills");
+export function collectSkills(root = REPO_ROOT) {
+  const skillsDir = join(root, ".github/skills");
   let dirs;
   try {
     dirs = readdirSync(skillsDir).filter((d) => statSync(join(skillsDir, d)).isDirectory());
@@ -197,9 +212,9 @@ function collectSkills() {
           category: "skill",
           label: fm.name || d,
           description: fm.description || "",
-          path: relative(REPO_ROOT, skillPath),
-          links: { source: GITHUB_BASE + relative(REPO_ROOT, skillPath) },
-          meta: {},
+          path: relative(root, skillPath),
+          links: { source: GITHUB_BASE + relative(root, skillPath) },
+          meta: invocationMetadata(fm),
         };
       } catch {
         return null;
@@ -227,22 +242,30 @@ function collectInstructions() {
   });
 }
 
-function collectPrompts() {
-  // Prompts live in tools/apex-prompts/ (not .github/prompts/) so they are
-  // never auto-loaded by VS Code Copilot's prompt-file discovery.
-  const dir = join(REPO_ROOT, "tools/apex-prompts");
-  const files = listFiles(dir, (f) => f.endsWith(".prompt.md"));
+export function collectPrompts(root = REPO_ROOT) {
+  const files = [".github/prompts", "tools/apex-prompts"].flatMap((directory) =>
+    listFiles(join(root, directory), (file) => file.endsWith(".prompt.md"), true),
+  );
+  const counts = new Map();
+  for (const file of files) {
+    const key = slug(basename(file, ".prompt.md"));
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
   return files.map((path) => {
     const content = readFileSync(path, "utf8");
     const fm = parseFrontmatter(content) || {};
     const name = basename(path, ".prompt.md");
+    const suffix =
+      counts.get(slug(name)) > 1
+        ? `:${createHash("sha256").update(relative(root, path)).digest("hex").slice(0, 12)}`
+        : "";
     return {
-      id: `prompt:${slug(name)}`,
+      id: `prompt:${slug(name)}${suffix}`,
       category: "prompt",
       label: name,
       description: fm.description || "",
-      path: relative(REPO_ROOT, path),
-      links: { source: GITHUB_BASE + relative(REPO_ROOT, path) },
+      path: relative(root, path),
+      links: { source: GITHUB_BASE + relative(root, path) },
       meta: {},
     };
   });
@@ -523,7 +546,8 @@ function buildEdges(nodes) {
     for (const [otherSlug, otherNode] of skillSlugMap) {
       if (otherSlug === nSlug || seen.has(otherNode.id)) continue;
       // Match word-boundary backtick or plain reference
-      const re = new RegExp(`\\b${otherSlug}\\b`);
+      const sourceSlug = otherSlug.replace(/^apex-/, "");
+      const re = new RegExp(`\\b(?:${otherSlug}|${sourceSlug})\\b`);
       if (re.test(body)) {
         seen.add(otherNode.id);
         edges.push({
@@ -547,7 +571,11 @@ function buildEdges(nodes) {
 
 // ---------- Main ----------
 
-function main() {
+export async function main(args = process.argv.slice(2)) {
+  if (args.length && (args.length !== 2 || args[0] !== "--output" || !args[1])) {
+    throw new Error("Usage: generate-explorer-graph.mjs [--output FILE]");
+  }
+  const outputPath = args.length ? resolve(args[1]) : DEFAULT_OUTPUT;
   const agents = collectAgents();
   const subagents = collectSubagents();
   const skills = collectSkills();
@@ -611,19 +639,21 @@ function main() {
     edges,
   };
   let previousGraph = null;
-  if (existsSync(OUT_PATH)) {
+  if (existsSync(outputPath)) {
     try {
-      previousGraph = JSON.parse(readFileSync(OUT_PATH, "utf8"));
+      previousGraph = JSON.parse(readFileSync(outputPath, "utf8"));
     } catch {
       previousGraph = null;
     }
   }
   graph.generatedAt = selectGeneratedAt(previousGraph, graph);
 
-  writeFileSync(OUT_PATH, `${JSON.stringify(graph, null, 2)}\n`);
-  console.log(`✅ Generated ${relative(REPO_ROOT, OUT_PATH)} — ${nodes.length} nodes, ${edges.length} edges`);
+  mkdirSync(dirname(outputPath), { recursive: true });
+  const formatting = await resolveConfig(join(REPO_ROOT, ".prettierrc.json"));
+  writeFileSync(outputPath, await format(JSON.stringify(graph), { ...formatting, parser: "json" }));
+  console.log(`✅ Generated ${relative(REPO_ROOT, outputPath)} — ${nodes.length} nodes, ${edges.length} edges`);
   console.log(`   ${categories.map((c) => `${c.label}:${c.count}`).join("  ")}`);
 }
 
 const invokedAsScript = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-if (invokedAsScript) main();
+if (invokedAsScript) await main();
