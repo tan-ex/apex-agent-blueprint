@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from pathlib import Path
 
 from . import __version__
 
@@ -41,6 +43,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("project", help="Project name")
     p_show.add_argument("--json", action="store_true", help="Output as JSON")
 
+    # handoff
+    p_handoff = sub.add_parser(
+        "handoff",
+        help="Deterministic next-step handoff contract and copyable resume command",
+    )
+    p_handoff.add_argument("project", nargs="?", default=None, help="Project name (auto-selects when unambiguous)")
+    p_handoff.add_argument("--json", action="store_true", help="Output as JSON")
+
     # decisions
     p_decisions = sub.add_parser("decisions", help="Query decision logs across projects")
     p_decisions.add_argument("--json", action="store_true", help="Output as JSON")
@@ -61,6 +71,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("project", help="Project name")
     p_init.add_argument("--json", action="store_true", help="Output as JSON")
     p_init.add_argument("--force", action="store_true", help="Overwrite existing session state")
+    p_init.add_argument(
+        "--layout",
+        type=int,
+        choices=(1, 2),
+        default=2,
+        help="Directory layout version (default: 2 with assets/, contracts/, reviews/, _meta/)",
+    )
 
     # start-step
     p_start = sub.add_parser("start-step", help="Mark a step as in_progress")
@@ -76,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_cp.add_argument("sub_step", help="Sub-step identifier")
     p_cp.add_argument("--json", action="store_true", help="Output as JSON")
     p_cp.add_argument("--artifact", type=str, default=None, help="Artifact path to append")
+    p_cp.add_argument("--sync-assessment", action="store_true", help="Regenerate authorized consumed-decision views")
+    p_cp.add_argument(
+        "--policy-feasibility", type=Path, help="Bind an offline-validated preliminary discovery snapshot"
+    )
     # Telemetry (Wave 0 — measure-workflow-baseline.mjs consumes these)
     p_cp.add_argument("--telemetry-step-start", type=str, default=None, help="ISO-8601 timestamp marking step start")
     p_cp.add_argument("--telemetry-step-end", type=str, default=None, help="ISO-8601 timestamp marking step end")
@@ -112,6 +133,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_decide.add_argument("--rationale", type=str, default=None, help="Rationale (Mode B)")
     p_decide.add_argument("--step", type=str, default=None, help="Step reference (Mode B)")
     p_decide.add_argument("--json", action="store_true", help="Output as JSON")
+    p_decide.add_argument(
+        "--input-record", type=Path, help="Scoped material input JSON; current authority plus history"
+    )
+    p_decide.add_argument("--phase-scope", type=Path, help="Explicit phase scope JSON, with --step")
+    p_decide.add_argument("--adopt-workflow", choices=["practical-v1"], help="Explicit owner-approved legacy adoption")
+    p_decide.add_argument("--dry-run", action="store_true", help="Read-only adoption assessment; grants no permission")
+    p_decide.add_argument(
+        "--review-extension", type=Path, help="Explicit bounded extension of an existing review cycle"
+    )
 
     # finding
     p_finding = sub.add_parser("finding", help="Manage open_findings")
@@ -131,6 +161,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # review-audit
     p_ra = sub.add_parser("review-audit", help="Manage review_audit entries")
+    p_ra.add_argument(
+        "--reconcile-events", type=Path, help="Read-only comparison with an explicitly scoped native capture"
+    )
     p_ra.add_argument("project", help="Project name")
     p_ra.add_argument("step", help="Step key (1, 2, 3, 3_5, 4, 5, 6, 7)")
     p_ra.add_argument("--complexity", type=str, default=None, help="Complexity level")
@@ -140,6 +173,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_ra.add_argument("--skip", action="append", default=None, help="Skip pass number (repeatable)")
     p_ra.add_argument("--skip-reason", action="append", default=None, help="Skip reason (repeatable)")
     p_ra.add_argument("--json", action="store_true", help="Output as JSON")
+    p_ra.add_argument("--attempt-id", default=None, help="Caller-assigned durable attempt identity")
+    p_ra.add_argument("--attempt-kind", choices=["invocation", "repair", "empty-output-retry"], default=None)
+    p_ra.add_argument("--input-digest", default=None, help="SHA-256 of the frozen input set")
+    p_ra.add_argument(
+        "--attempt-input",
+        action="append",
+        default=None,
+        metavar="PATH",
+        help="Frozen input file or directory; the digest is computed from these (repeatable, instead of --input-digest)",
+    )
+    p_ra.add_argument("--attempt-outcome", choices=["started", "completed", "failed", "unknown"], default=None)
+    p_ra.add_argument(
+        "--review-output",
+        choices=["empty", "nonempty", "unknown"],
+        default=None,
+        help="Observed reviewer output, separate from the completed/failed native task outcome",
+    )
+    p_ra.add_argument("--retry-of", default=None, help="Original attempt ID for an identical-input empty-output retry")
+    p_ra.add_argument("--review-request", type=Path, help="Exact preflighted request; derives identity and cycle")
+    p_ra.add_argument("--closure-of", help="Initial attempt ID for a bounded closure; not a new cycle")
+    p_ra.add_argument("--review-result", type=Path, help="Published attributed result to select after validation")
 
     # transition — composite checkpoint + decide + complete-step + start next
     # (#425, Wave 4). Atomic across a single 00-session-state.json write.
@@ -175,6 +229,62 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_tr.add_argument("--json", action="store_true", help="Output as JSON")
 
+    p_gate = sub.add_parser("check-gate", help="Read-only current Plan/CodeGen/lab deployment readiness")
+    p_gate.add_argument("project")
+    p_gate.add_argument(
+        "--action",
+        required=True,
+        choices=["plan-complete", "codegen", "code-complete", "deploy", "deployment-complete", "teardown-complete"],
+    )
+    p_gate.add_argument(
+        "--authorization-only",
+        action="store_true",
+        help="Evaluate authorization before separate human gate approval; grants no progression",
+    )
+    p_gate.add_argument("--json", action="store_true")
+
+    for order_parser in (p_complete, p_tr, p_start):
+        order_parser.add_argument(
+            "--allow-out-of-order",
+            default=None,
+            metavar="REASON",
+            help="Human override: proceed although the previous step is not complete; the reason is logged.",
+        )
+
+    for risk_parser in (p_complete, p_tr, p_start, p_gate):
+        risk_parser.add_argument("--risk-authorization", help="Explicit signed lab risk authorization envelope")
+        risk_parser.add_argument("--risk-approval", help="Separate signed human gate approval envelope")
+        risk_parser.add_argument(
+            "--deployment-context", help="Actual lab tenant/subscription/event/tree/input/phase context"
+        )
+
+    for completion_parser in (p_complete, p_tr):
+        completion_parser.add_argument(
+            "--plan-review",
+            default=None,
+            help="Explicit later comprehensive Plan review path; Step 4 default-mode completion only.",
+        )
+        completion_parser.add_argument(
+            "--plan-review-reason",
+            default=None,
+            help="Required audit reason for selecting an authorized Plan confirmation; not human approval.",
+        )
+        completion_parser.add_argument(
+            "--governance-review",
+            default=None,
+            help="Explicit later Governance review path (absolute or workspace-relative); Step 3.5 completion only.",
+        )
+        completion_parser.add_argument(
+            "--governance-review-reason",
+            default=None,
+            help="Required audit reason for selecting a separately authorized replacement review; not human approval.",
+        )
+
+    recovery = sub.add_parser("recover-state", help="Explicitly restore valid backup of corrupt/missing primary state")
+    recovery.add_argument("project")
+    recovery.add_argument("--reason", required=True, help="Audit reason; healthy state is never rolled back")
+    recovery.add_argument("--json", action="store_true")
+
     return parser
 
 
@@ -195,6 +305,8 @@ def main(argv: list[str] | None = None) -> int:
         from .commands.search import run
     elif args.command == "show":
         from .commands.show import run
+    elif args.command == "handoff":
+        from .commands.handoff import run
     elif args.command == "decisions":
         from .commands.decisions import run
     elif args.command == "reindex":
@@ -217,6 +329,18 @@ def main(argv: list[str] | None = None) -> int:
         from .commands.review_audit import run
     elif args.command == "transition":
         from .commands.transition import run
+    elif args.command == "check-gate":
+        from .risk_gate import run
+    elif args.command == "recover-state":
+
+        def run(options):
+            from .state_writer import recover_state
+
+            if not options.reason.strip():
+                raise ValueError("Recovery requires a non-empty audit reason")
+            result = recover_state(options.project, options.reason.strip())
+            print(json.dumps(result) if options.json else f"Recovered {options.project}; revision {result['revision']}")
+            return 0
     else:
         parser.print_help()
         return 1
@@ -224,6 +348,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return run(args)
     except Exception as e:
+        from .state_writer import IndexCommitError, StateConflict
+
+        if isinstance(e, IndexCommitError):
+            payload = {
+                "outcome": "committed_but_index_stale",
+                "revision": e.revision,
+                "error": str(e),
+                "recovery": "Run apex-recall reindex; do not repeat the completed mutation",
+            }
+            print(json.dumps(payload) if getattr(args, "json", False) else str(e))
+            return 3
+        if isinstance(e, StateConflict):
+            print(json.dumps({"outcome": "conflict", "error": str(e)}) if getattr(args, "json", False) else str(e))
+            return 2
         print(f"Error: {e}", file=sys.stderr)
         return 1
 

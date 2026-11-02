@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "tools": [
+        "*"
+      ]
+    },
+    "azure-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure/mcp@3.0.0",
+        "server",
+        "start"
+      ],
+      "env": {
+        "NPM_CONFIG_ALLOW_REMOTE": "all"
+      },
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}

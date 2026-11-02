@@ -4,7 +4,7 @@
 set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+readonly REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 readonly BASELINES_DIR="${REPO_ROOT}/agent-output/_baselines"
 
 BASELINE_LABEL=""
@@ -52,6 +52,11 @@ fi
 
 readonly SNAPSHOT_DIR="${BASELINES_DIR}/${BASELINE_LABEL}"
 
+if [[ ! "${BASELINE_LABEL}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  echo "Error: invalid baseline label" >&2
+  exit 1
+fi
+
 if [[ ! -d "${SNAPSHOT_DIR}" ]]; then
   echo "Error: Baseline '${BASELINE_LABEL}' not found at ${SNAPSHOT_DIR}" >&2
   exit 1
@@ -60,6 +65,30 @@ fi
 if [[ -z "${OUTPUT_PATH}" ]]; then
   OUTPUT_PATH="${SNAPSHOT_DIR}/diff-report.md"
 fi
+
+if ! command -v diff >/dev/null 2>&1; then
+  echo "Error: required command missing: diff (install diffutils)" >&2
+  exit 1
+fi
+
+files_match() {
+  local status=0
+  diff -q "$1" "$2" >/dev/null || status=$?
+  if [[ "${status}" -gt 1 ]]; then
+    echo "Error: diff failed comparing $1 and $2 (exit ${status})" >&2
+    exit "${status}"
+  fi
+  return "${status}"
+}
+
+unified_diff() {
+  local status=0
+  diff -u "$1" "$2" || status=$?
+  if [[ "${status}" -gt 1 ]]; then
+    echo "Error: diff failed comparing $1 and $2 (exit ${status})" >&2
+    return "${status}"
+  fi
+}
 
 readonly MANIFEST="${SNAPSHOT_DIR}/manifest.json"
 if [[ ! -f "${MANIFEST}" ]]; then
@@ -71,13 +100,32 @@ baseline_timestamp=$(jq -r '.timestamp' "${MANIFEST}")
 baseline_sha=$(jq -r '.git_sha' "${MANIFEST}")
 current_sha=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
+if [[ ! -s "${SNAPSHOT_DIR}/SHA256SUMS" ]] || ! (
+  cd "${SNAPSHOT_DIR}"
+  sha256sum --check --status SHA256SUMS
+); then
+  echo "Error: baseline hashes missing or invalid; capture a verified baseline before comparison" >&2
+  exit 1
+fi
+
 readonly CATEGORIES=(
   ".github/agents:Agents"
   ".github/instructions:Instructions"
-  "tools/apex-prompts:Prompts"
   ".github/skills:Skills"
+  ".github/copilot-instructions.md:Copilot instructions"
+  "tools/registry/agent-registry.json:Agent registry"
+  "infra/bicep/AGENTS.md:Bicep instructions"
+  "infra/terraform/AGENTS.md:Terraform instructions"
   "AGENTS.md:AGENTS.md"
 )
+
+for entry in "${CATEGORIES[@]}"; do
+  target="${entry%%:*}"
+  if ! jq -e --arg target "$target" '.backed_up_targets | index($target) != null' "$MANIFEST" >/dev/null; then
+    echo "Error: target $target was not captured by this baseline; comparison would be incomplete" >&2
+    exit 1
+  fi
+done
 
 total_added=0
 total_modified=0
@@ -110,9 +158,11 @@ for entry in "${CATEGORIES[@]}"; do
       if [[ ! -f "${new_file}" ]]; then
         deleted=$((deleted + 1))
         cat_diffs+=$'\n'"#### Deleted: \`${target}/${rel_file}\`"$'\n'
-      elif ! diff -q "${old_file}" "${new_file}" > /dev/null 2>&1; then
+      elif files_match "${old_file}" "${new_file}"; then
+        unchanged=$((unchanged + 1))
+      else
         modified=$((modified + 1))
-        udiff=$(diff -u "${old_file}" "${new_file}" 2>/dev/null || true)
+        udiff=$(unified_diff "${old_file}" "${new_file}")
         lines_added=$(echo "${udiff}" | grep -c '^+[^+]' || true)
         lines_removed=$(echo "${udiff}" | grep -c '^-[^-]' || true)
         total_lines_added=$((total_lines_added + lines_added))
@@ -120,8 +170,6 @@ for entry in "${CATEGORIES[@]}"; do
 
         cat_diffs+=$'\n'"#### Modified: \`${target}/${rel_file}\` (+${lines_added}/-${lines_removed})"$'\n\n'
         cat_diffs+='```diff'$'\n'"${udiff}"$'\n''```'$'\n'
-      else
-        unchanged=$((unchanged + 1))
       fi
     done < <(cd "${baseline_path}" && find . -type f ! -name 'manifest.json' | sed 's|^\./||' | sort)
 
@@ -142,9 +190,11 @@ for entry in "${CATEGORIES[@]}"; do
     if [[ ! -f "${current_path}" ]]; then
       deleted=$((deleted + 1))
       cat_diffs+=$'\n'"#### Deleted: \`${target}\`"$'\n'
-    elif ! diff -q "${baseline_path}" "${current_path}" > /dev/null 2>&1; then
+    elif files_match "${baseline_path}" "${current_path}"; then
+      unchanged=$((unchanged + 1))
+    else
       modified=$((modified + 1))
-      udiff=$(diff -u "${baseline_path}" "${current_path}" 2>/dev/null || true)
+      udiff=$(unified_diff "${baseline_path}" "${current_path}")
       lines_added=$(echo "${udiff}" | grep -c '^+[^+]' || true)
       lines_removed=$(echo "${udiff}" | grep -c '^-[^-]' || true)
       total_lines_added=$((total_lines_added + lines_added))
@@ -152,8 +202,6 @@ for entry in "${CATEGORIES[@]}"; do
 
       cat_diffs+=$'\n'"#### Modified: \`${target}\` (+${lines_added}/-${lines_removed})"$'\n\n'
       cat_diffs+='```diff'$'\n'"${udiff}"$'\n''```'$'\n'
-    else
-      unchanged=$((unchanged + 1))
     fi
   fi
 

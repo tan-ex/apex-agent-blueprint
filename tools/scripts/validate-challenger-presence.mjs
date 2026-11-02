@@ -30,6 +30,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Reporter } from "./_lib/reporter.mjs";
+import { LAYOUT_SUBDIRS, resolveReviewPath, resolveSessionStatePath } from "./_lib/project-paths.mjs";
+import { validateProject } from "./validate-risk-authorizations.mjs";
 
 const ROOT = "agent-output";
 
@@ -42,7 +44,9 @@ const GATES = {
   },
   2: {
     gatingArtifact: "02-architecture-assessment.md",
+    alternativeArtifact: "03-des-cost-estimate.md",
     requiredSidecar: "challenge-findings-architecture.json",
+    additionalSidecar: "challenge-findings-cost-estimate.json",
     label: "Step 2 Architecture",
   },
   "3_5": {
@@ -93,6 +97,62 @@ function sidecarOk(sidecarPath) {
   }
 }
 
+function reviewSidecar(sessionStatePath, defaultSidecar) {
+  try {
+    const state = JSON.parse(fs.readFileSync(sessionStatePath, "utf8"));
+    if (state?.decisions?.review_depth === "deep") return defaultSidecar.replace(/\.json$/, "-pass1.json");
+  } catch {
+    return defaultSidecar;
+  }
+  return defaultSidecar;
+}
+
+const COST_FILES = /^(02-cost-estimate|02-cost-candidates|03-des-cost-estimate).*\.json$/;
+
+// Same rule as apex-recall's Step 2 completion check; top level only, `_meta/` is the archive.
+function step2Residue(projectDir) {
+  const found = [];
+  for (const entry of fs.readdirSync(projectDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    if (entry.name.endsWith(".tmp.md")) found.push(`${entry.name}: scratch file`);
+    else if (COST_FILES.test(entry.name)) {
+      try {
+        const doc = JSON.parse(fs.readFileSync(path.join(projectDir, entry.name), "utf-8"));
+        if (doc?.status === "FAILED") found.push(`${entry.name}: cost estimate with status FAILED`);
+      } catch {
+        // unreadable files are not this check's concern
+      }
+    }
+  }
+  return found;
+}
+
+const STEP_ORDER = ["1", "2", "3", "3_5", "4", "5", "6", "7"];
+
+function isStepInProgressBeforeHandoff(sessionStatePath, stepKey) {
+  if (!fs.existsSync(sessionStatePath)) return false;
+  try {
+    const state = JSON.parse(fs.readFileSync(sessionStatePath, "utf8"));
+    const steps = state?.steps;
+    if (!steps || typeof steps !== "object") return false;
+    if (steps[stepKey]?.status !== "in_progress") return false;
+    const idx = STEP_ORDER.indexOf(stepKey);
+    if (idx === -1) return false;
+    const laterSteps = STEP_ORDER.slice(idx + 1);
+    return !laterSteps.some((k) => steps[k]?.status === "in_progress" || steps[k]?.status === "complete");
+  } catch {
+    return false;
+  }
+}
+
+function step2Complete(sessionStatePath) {
+  try {
+    return JSON.parse(fs.readFileSync(sessionStatePath, "utf-8"))?.steps?.["2"]?.status === "complete";
+  } catch {
+    return false;
+  }
+}
+
 const projects = listProjects(ROOT);
 if (projects.length === 0) {
   console.log("  ℹ️  No projects under agent-output/ — nothing to validate.\n");
@@ -100,13 +160,50 @@ if (projects.length === 0) {
 
 for (const project of projects) {
   const projectDir = path.join(ROOT, project);
-  const sessionState = path.join(projectDir, "00-session-state.json");
+  const sessionState = resolveSessionStatePath(projectDir);
+  let stateObj = null;
+  if (fs.existsSync(sessionState)) {
+    try {
+      stateObj = JSON.parse(fs.readFileSync(sessionState, "utf-8"));
+    } catch {
+      stateObj = null;
+    }
+    try {
+      for (const error of validateProject(path.resolve("."), project)) r.warn(project, `${error} (warning only)`);
+    } catch (error) {
+      r.warn(project, `Risk authorization check unavailable (warning only): ${error.message}`);
+    }
+  }
+  if (stateObj?.layout_version === 2) {
+    const allowedDirs = new Set(LAYOUT_SUBDIRS);
+    for (const entry of fs.readdirSync(projectDir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.isDirectory() && !allowedDirs.has(entry.name)) {
+        r.error(
+          `${project}/Layout v2`,
+          `Unexpected root directory "${entry.name}" in ${projectDir} (allowed: ${LAYOUT_SUBDIRS.join(", ")})`,
+        );
+      } else if (entry.isFile() && !entry.name.endsWith(".md")) {
+        r.error(
+          `${project}/Layout v2`,
+          `Non-Markdown file "${entry.name}" at ${projectDir} root — move to contracts/, reviews/, assets/, or _meta/`,
+        );
+      }
+    }
+  }
   for (const [stepKey, gate] of Object.entries(GATES)) {
     r.tick();
-    const gatingPath = path.join(projectDir, gate.gatingArtifact);
-    if (!fs.existsSync(gatingPath)) continue; // step not produced
-    const sidecarPath = path.join(projectDir, gate.requiredSidecar);
-    if (sidecarOk(sidecarPath)) continue;
+    const gatingArtifact = [gate.gatingArtifact, gate.alternativeArtifact].find(
+      (artifact) => artifact && fs.existsSync(path.join(projectDir, artifact)),
+    );
+    if (!gatingArtifact) continue;
+    const requiredSidecar = ["2", "4"].includes(stepKey)
+      ? reviewSidecar(sessionState, gate.requiredSidecar)
+      : gate.requiredSidecar;
+    const missingSidecars = [requiredSidecar, gate.additionalSidecar].filter(
+      (sidecar) => sidecar && !sidecarOk(resolveReviewPath(projectDir, sidecar)),
+    );
+    if (missingSidecars.length === 0) continue;
 
     const skipReason = skipReasonFor(sessionState, stepKey);
     if (skipReason) {
@@ -114,12 +211,25 @@ for (const project of projects) {
       continue;
     }
 
+    if (isStepInProgressBeforeHandoff(sessionState, stepKey)) {
+      r.info(`${project}/${gate.label}`, `step ${stepKey} is in_progress (pre-review draft before handoff)`);
+      continue;
+    }
+
     r.error(
       `${project}/${gate.label}`,
-      `gating artifact ${gate.gatingArtifact} exists but required findings ` +
-        `sidecar ${gate.requiredSidecar} is missing or unreadable. Run the ` +
+      `gating artifact ${gatingArtifact} exists but required findings ` +
+        `sidecar(s) ${missingSidecars.join(", ")} are missing or unreadable. Run the ` +
         `challenger-review-subagent (or 10-Challenger agent) to produce it.`,
     );
+  }
+  if (step2Complete(sessionState)) {
+    for (const item of step2Residue(projectDir)) {
+      r.error(
+        `${project}/Step 2 Architecture`,
+        `${item}. Move superseded or failed cost files to ${projectDir}/_meta/ and delete scratch *.tmp.md files.`,
+      );
+    }
   }
 }
 

@@ -1,105 +1,68 @@
 ---
-description: "Shared operating frame for main step agents — read SKILL.md once, use apex-recall for cached lookups, never edit upstream artifacts. Pairs with each agent's body-level Operating frame H2."
+description: "Shared main-agent authoring guidance: native interaction, scoped domain inputs, actual validation and durable recovery."
 applyTo: ".github/agents/*.agent.md"
 ---
 
-# Agent Operating Frame — Shared Rules
+# Agent Operating Frame
 
-> **Scope**: this file is auto-loaded for every main agent in
-> `.github/agents/*.agent.md` (single-star glob — `_subagents/` is
-> deliberately excluded). It captures the project-wide operating
-> rules that previously lived as 4 near-identical H2 sections
-> (`## Context Awareness`, `## Scope Fencing`, `## Subagent Budget`,
-> `## Investigate Before Answering`) inside each agent body.
->
-> Each agent now ships a tight body-level `## Operating frame`
-> section (≤ 6 lines) that lists only the agent-specific subagents
-> and the one-line scope statement, and pulls everything else from
-> here.
+An authoring `applyTo` match does not prove runtime attachment. Keep essential constraints in the agent body.
 
----
+## Native interaction
 
-## Read each SKILL.md once
+Every directly selected main can use actual `ask_user` for material missing inputs.
+Requirements, Architect, Design and Governance retain their interactive discovery/clarification role.
+Batch independent fields, validate freeform values and reuse current answers.
+Before direct display or delegated return, apply the
+[shared question-form checks](../copilot-instructions.md#user-question-forms):
+distinct contextual titles, no unconditional companion note fields, reuse custom answers and only triggered follow-ups.
+This covers every question type and phase. File-based preflight never grants scratch-write permission to read-only roles.
+Native `requestedSchema` contains only `properties`; root `type`, `required` and `additionalProperties`
+are not tool parameters. Direct `ask_user` receives only `message` and `requestedSchema`.
+Delegated envelopes keep unresolved names outside the schema in `needed_inputs`.
+Delegated mains return a stable `USER_INPUT_REQUIRED` form to the interactive parent and stop the phase.
+Leaves never ask users, delegate or manage parent todos.
+An absent question tool blocks a required decision; no guessed defaults or terminal prompts.
+Native Autopilot can answer questions; a form return is not independent human authorization.
 
-- When a SKILL.md is named in an agent's mandatory-read list, read it
-  exactly once at boot — never re-read mid-session.
-- The same applies to `references/*.md` files. If you have already
-  read a reference in this conversation, do not call `read_file`
-  on it again — use the content already in context.
-- Re-reading the same file is the single biggest avoidable source of
-  input-token bloat. See
-  [`agent-authoring.instructions.md`](agent-authoring.instructions.md#context-hygiene-token-efficiency).
+## Scope and current evidence
 
-## Use `apex-recall` for cached lookups
+- Load only current-phase skills/references, reuse available unchanged sections and recover missing
+  required guidance after source changes, compaction or a new chat.
+- Recover project state through `apex-recall show <project> --json`; no direct state JSON reads/writes.
+  A file inventory is not artifact content or approval evidence.
+- Respect domain ownership/frozen inputs and actual governance/security. Return drift to its owner,
+  not an inline upstream replacement.
+- User instructions outrank skill style/workflow choices, not security/governance/approval requirements.
+  Name the path and exact blocking requirement when relevant.
+- Validate written non-Markdown shapes and actual commands before passing results.
+  Markdown artifact validation follows the designated Git/review owner.
+- Keep temporary validation or helper scripts inside `agent-output/<project>/_meta/` and remove them
+  when no longer needed; never leave ad-hoc `.py` helper scripts at the root of `agent-output/<project>/`
+  alongside deliverable diagram scripts.
 
-- Use `apex-recall show <project> --json` to retrieve cached
-  decisions, findings, and artifact state instead of re-reading
-  predecessor artifacts after the boot read.
-- The `--json` flag is canonical — never parse the human-readable
-  output. Schema and jq templates:
-  [`tools/apex-recall/docs/show-schema.md`](../../tools/apex-recall/docs/show-schema.md).
-- If `apex-recall` returns useful context, **skip** redundant file
-  reads. If it returns empty or errors, proceed normally — it is a
-  convenience, not a blocker.
+## Native tasks
 
-## Investigate before answering
+Use explicit scope, inputs, outputs and failure criteria in actual native task prompts.
+Consume actual results and only supported same-task handles; one-shot tasks are not universally resumable.
+Keep actual role selection separate from a coordinating default chat; report unknown native role context honestly.
+Missing role telemetry is not a workflow gate for otherwise-authorized coordination.
+Project metadata and generic session-information tools do not establish the selected role.
+Honor actual role/tool restrictions and human approvals; do not ask for repeated selection solely to fill a missing label.
+Before reviewer dispatch use the shared request preflight and persist its attempt start; preserve the saved
+digest and actual outcome. Do not backdate starts, infer successful publication from task completion,
+or mask consequential command failures behind display/cleanup. These checks grant no permissions.
+No worker-ready turn, custom execution envelope, per-worker log gate or handoff-button dependency.
+The graph defines domain prerequisites/owners, not permission or native UI transitions.
+Runtime hooks are retired and must not be restored.
 
-- Read the implementation plan, governance constraints, and prior
-  artifacts (via `apex-recall show`) before generating any new
-  content for the current step.
-- Verify external contracts (AVM module schemas, Azure REST APIs,
-  policy effects) via the preflight or validate subagent named in
-  the agent's `## Operating frame`. Do not assume.
+Independent reviewers retain the existing actual-result receipt/freshness contract and review budgets.
+Automatic and manual review use the same read-only structured leaf; only the parent records its actual JSON.
+One identical-input missing/empty review retry may apply; missing capability returns an explicit blocker.
+No nested main wrapper, model substitution, fabricated findings or counter reset.
 
-## Never edit upstream artifacts
+## Recovery and completion
 
-- Each step owns specific artifacts. Never edit an artifact owned
-  by an earlier step — the workflow graph enforces this via
-  `metadata.plan_lock` after gate-3 (Plan Approval).
-- Drift between phases must unwind to the owning agent (governance
-  → 04g, plan → 04/05, code → 06b/06t). Do not patch in place.
-
-## Validate every artifact after writing
-
-Immediately after writing any non-markdown artifact, run the matching
-shape-check command. Fail closed: fix and re-run before handing off.
-The canonical table lives in the `azure-artifacts` skill
-([Post-write validation](../skills/azure-artifacts/SKILL.md#post-write-validation));
-the rows below are an inline cheat sheet so agents never need to chase
-the link mid-write.
-
-| Artifact type                              | Validator command (run after each write)                                |
-| ------------------------------------------ | ----------------------------------------------------------------------- |
-| `*.json`                                   | `python -m json.tool <file> >/dev/null`                                 |
-| `*.bicep`                                  | `bicep build --stdout <file> >/dev/null`                                |
-| `*.tf` (inside a module dir)               | `terraform fmt -check <file>` then `terraform validate`                 |
-| `challenge-findings-*.json` (sidecar JSON) | `node tools/scripts/validate-challenger-findings.mjs <file>`            |
-| `challenge-findings-*-decisions.json` (per-finding sidecar) | `node tools/scripts/validate-challenge-findings-decisions.mjs <file>` |
-| `*.md` artifact                            | Delegated to lefthook `artifact-validation` — do NOT invoke directly  |
-
-Markdown artifacts are validated by the lefthook `artifact-validation`
-pre-commit hook — do not invoke `lint:artifact-templates` /
-`markdownlint-cli2` directly.
-
-## Subagent budget — agent-specific
-
-- Every main agent declares its subagent budget in its body-level
-  `## Operating frame` section. The budget lists subagents the agent
-  is allowed to invoke and the role each plays (lint, validate,
-  challenger review, cost estimate, etc.).
-- Cross-family model calls (e.g., GPT-5.6-Luna → Claude Sonnet 5
-  `bicep-whatif-subagent`) preserve JSON-shaped contracts verbatim;
-  no parsing changes are required at the parent agent.
-- The canonical model mix is tracked in repo memory
-  (`codegen-model-mix-2026.md`); refer to it for which subagent
-  runs on which model.
-
-## Out of scope for this file
-
-- Per-agent role boundaries — kept in each agent's own
-  `## Operating frame`.
-- The verbatim `## Completion Handoff` contract — owned by
-  [`compression-templates.md`](../skills/context-management/references/compression-templates.md#gate-boundary-clear-handoff-contract)
-  and grep-locked by `tools/scripts/validate_orchestrator_handoff.py`.
-- Mid-step `/clear` between challenger passes — owned by the
-  orchestrator's Session Break Protocol.
+Preserve checkpoints, actual output paths, unresolved findings and separate approval references.
+`00-handoff.md` is a durable recovery summary, not UI handoff metadata.
+Model labels and source allowlists are not runtime attestation or credential isolation.
+A valid worker result, accepted finding or completed phase does not approve the next consequential action.

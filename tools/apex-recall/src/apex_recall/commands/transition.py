@@ -42,8 +42,11 @@ from __future__ import annotations
 import json
 import sys
 
+from ..reopen import clear_stale
+from ..risk_gate import COMPLETION_ACTIONS, check_entry, evaluate_gate, ordinary_entry_warning, record_authorization
 from ..state_writer import (
     _iso_now,
+    check_state_revision,
     migrate_to_v3,
     read_state,
     session_state_path,
@@ -51,7 +54,18 @@ from ..state_writer import (
     validate_step_key,
     write_state,
 )
-from .complete_step import _challenger_findings_missing, _record_skip
+from ..step2_gate import report_residue, step2_residue
+from ..step_order import check_order, report_order_error
+from .complete_step import (
+    _challenger_findings_invalid,
+    _challenger_findings_missing,
+    _record_skip,
+    _report_invalid_review,
+    _select_replacement_review,
+    is_audited_replay,
+    record_selection,
+    watch_review_inputs,
+)
 
 
 def _parse_decisions(raw_pairs: list[str] | None) -> dict[str, str]:
@@ -81,6 +95,7 @@ def run(args) -> int:  # noqa: C901 — one CLI dispatcher, branchy by design
     allow_missing = bool(getattr(args, "allow_missing_challenger", False))
     skip_reason = (getattr(args, "challenger_skip_reason", None) or "").strip()
     as_json = bool(getattr(args, "json", False))
+    data = read_state(session_state_path(project))
 
     try:
         decisions = _parse_decisions(getattr(args, "decision", None))
@@ -92,10 +107,52 @@ def run(args) -> int:  # noqa: C901 — one CLI dispatcher, branchy by design
             print(f"Error: {exc}", file=sys.stderr)
         return 1
 
+    try:
+        override = getattr(args, "allow_out_of_order", None)
+        now_order = _iso_now()
+        if complete:
+            check_order(data, from_step, override, now_order, completing=True)
+        check_order(
+            data, to_step, override, now_order, completing=False, completed_now=(from_step,) if complete else ()
+        )
+    except ValueError as exc:
+        return report_order_error(project, to_step, exc, as_json)
+
+    if complete and from_step == "2" and data.get("steps", {}).get(from_step, {}).get("status") != "complete":
+        residue = step2_residue(project)
+        if residue:
+            return report_residue(project, residue, as_json)
+
+    try:
+        if complete:
+            from ..practical import check_views
+
+            check_views(project, data, from_step)
+        governance_review, selection = _select_replacement_review(project, from_step, args, data)
+        explicit_selection = any(
+            getattr(args, name, None) is not None
+            for name in (
+                "plan_review",
+                "plan_review_reason",
+                "governance_review",
+                "governance_review_reason",
+            )
+        )
+        if explicit_selection and not complete:
+            raise ValueError("Replacement review selection requires transition --complete")
+        if complete or governance_review is not None:
+            watch_review_inputs(data, project, from_step, governance_review)
+            if selection and data.input_revisions[governance_review] != selection["stored"]["sha256"]:
+                raise ValueError("Selected review changed before validation")
+    except (OSError, ValueError) as error:
+        return _report_invalid_review(project, from_step, str(error), as_json)
+
     # Challenger gate (only when completing from_step). Read-only; runs
     # before any state mutation so a gate failure does not partially write.
     if complete:
-        blocked, gating_path, sidecar_path = _challenger_findings_missing(project, from_step)
+        blocked, gating_path, sidecar_path = _challenger_findings_missing(project, from_step, governance_review)
+        if blocked and not allow_missing and is_audited_replay(data, from_step):
+            blocked = False
         if blocked and not allow_missing:
             msg = {
                 "project": project,
@@ -130,17 +187,83 @@ def run(args) -> int:  # noqa: C901 — one CLI dispatcher, branchy by design
             if as_json:
                 print(json.dumps(msg))
             else:
-                print(
-                    "--allow-missing-challenger requires --challenger-skip-reason "
-                    '"<reason>" for the audit trail.'
-                )
+                print('--allow-missing-challenger requires --challenger-skip-reason "<reason>" for the audit trail.')
             return 2
     else:
         blocked = False
 
+    risk_result = entry_result = None
+    try:
+        if (data.get("risk_authorizations") or getattr(args, "risk_authorization", None)) and (
+            from_step,
+            to_step,
+        ) not in (("4", "5"), ("5", "6"), ("6", "7")):
+            raise ValueError("Exception-bearing transitions must follow the supported Plan/CodeGen/Deploy path")
+        if (
+            complete
+            and from_step in COMPLETION_ACTIONS
+            and (data.get("risk_authorizations") or getattr(args, "risk_authorization", None))
+        ):
+            risk_result = evaluate_gate(project, data, COMPLETION_ACTIONS[from_step], args, selected=governance_review)
+        elif complete or governance_review is not None:
+            invalid = _challenger_findings_invalid(project, from_step, governance_review)
+            if invalid:
+                raise ValueError(invalid)
+        if complete and from_step == "4":
+            if to_step == "6" and risk_result and risk_result.get("record"):
+                raise ValueError("Kit/Plan completion cannot skip CodeGen to authorize deployment")
+            if to_step == "5" and risk_result and risk_result.get("record"):
+                entry_result = evaluate_gate(
+                    project, data, "codegen", args, selected=governance_review, completing_plan=True
+                )
+        else:
+            if to_step == "7" and complete and from_step == "6" and risk_result:
+                entry_result = risk_result
+            else:
+                entry_result = check_entry(project, data, to_step, args, completing_code=complete and from_step == "5")
+        if (getattr(args, "risk_authorization", None) or getattr(args, "risk_approval", None)) and not (
+            risk_result or entry_result
+        ):
+            raise ValueError("Risk authorization requires a supported completion or downstream entry action")
+    except ValueError as error:
+        return _report_invalid_review(project, from_step, str(error), as_json)
+    warning = ordinary_entry_warning(project, data, to_step) if not entry_result else None
+    check_state_revision(data, session_state_path(project))
+
     # Single atomic mutation.
-    path = session_state_path(project)
-    data = read_state(path)
+    prior_selection = data.get("review_selections", {}).get(from_step)
+    selected = selection.get("stored") if selection else None
+    same_selection = (
+        not selected
+        or prior_selection
+        and all(prior_selection.get(key) == value for key, value in selected.items() if key != "selected_at")
+    )
+    if (
+        data.get("steps", {}).get(to_step, {}).get("started")
+        and data.get("current_step", 0) >= step_to_int(to_step)
+        and (not complete or data.get("steps", {}).get(from_step, {}).get("status") == "complete")
+        and all(data.get("decisions", {}).get(key) == value for key, value in decisions.items())
+        and same_selection
+        and all(
+            not result
+            or not result.get("record")
+            or data.get("risk_authorizations", {}).get(result["action"]) == result["record"]
+            for result in (risk_result, entry_result)
+        )
+    ):
+        if complete and from_step == "4" and not (data.get("metadata") or {}).get("plan_lock"):
+            from ..reopen import set_plan_lock
+
+            set_plan_lock(data, _iso_now())
+            write_state(project, data)
+        print(
+            json.dumps({"project": project, "from_step": from_step, "to_step": to_step, "outcome": "already_applied"})
+            if as_json
+            else "Transition already applied"
+        )
+        return 0
+    if data.get("steps", {}).get(to_step, {}).get("started"):
+        raise ValueError("Transition conflict: destination already started; replay cannot reset progress or decisions")
     data = migrate_to_v3(data)
     now = _iso_now()
 
@@ -148,10 +271,18 @@ def run(args) -> int:  # noqa: C901 — one CLI dispatcher, branchy by design
     from_data = data["steps"].get(from_step, {})
     if complete:
         from_data["status"] = "complete"
-        from_data["completed"] = now
+        from ..practical import enabled
+
+        if enabled(data):
+            from_data["completed_environments"] = data["decisions"]["phase_scopes"][from_step]["environments"]
+        from_data["completed"] = from_data.get("completed") or now
         from_data["sub_step"] = None
         if blocked and allow_missing:
             _record_skip(data, from_step, skip_reason, now)
+        if from_step == "4":
+            from ..reopen import set_plan_lock
+
+            set_plan_lock(data, now)
     data["steps"][from_step] = from_data
 
     # 2. Record decisions in the decisions{} map.
@@ -163,15 +294,23 @@ def run(args) -> int:  # noqa: C901 — one CLI dispatcher, branchy by design
         else:
             # Defensive: replace with dict only if legacy non-dict was seen.
             data["decisions"] = dict(decisions)
+        for top_key in ("iac_tool", "region"):
+            if top_key in decisions:
+                data[top_key] = decisions[top_key]
 
     # 3. Start to_step.
     to_data = data["steps"].get(to_step, {})
     to_data["status"] = "in_progress"
     to_data["started"] = now
     to_data["completed"] = None
+    clear_stale(to_data)
     data["steps"][to_step] = to_data
     data["current_step"] = step_to_int(to_step)
 
+    if complete:
+        record_selection(data, from_step, selection, now)
+    record_authorization(data, risk_result, now)
+    record_authorization(data, entry_result, now)
     write_state(project, data)
 
     result = {
@@ -182,7 +321,11 @@ def run(args) -> int:  # noqa: C901 — one CLI dispatcher, branchy by design
         "decisions_recorded": list(decisions.keys()),
         "challenger_skip_recorded": bool(blocked and allow_missing),
         "timestamp": now,
+        "review_gate": risk_result["status"] if risk_result else None,
+        "entry_gate": entry_result["status"] if entry_result else None,
     }
+    if warning:
+        result["warnings"] = [warning]
     if as_json:
         print(json.dumps(result))
     else:

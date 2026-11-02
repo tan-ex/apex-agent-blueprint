@@ -14,7 +14,7 @@ export default [
   {
     ignores: [
       "node_modules/**",
-      "site/**", // Adopt-narrow: site/ deferred for 90-day reassessment per implementation-plan.md
+      ".archive/**",
       "**/.venv/**", // Python virtualenvs ship vendored JS (matplotlib/urllib3) — never lint
       "**/venv/**",
       ".github/skills/sensei/**", // Self-contained sub-project with its own toolchain

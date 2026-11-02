@@ -30,12 +30,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findArtifactFiles } from "./_lib/artifact-index.mjs";
 import { loadValidator } from "./_lib/ajv-validator.mjs";
+import { projectDirFromPath, resolveContractPath } from "./_lib/project-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const AGENTS_DIR = path.join(ROOT, ".github/agents");
 const REGISTRY = path.join(ROOT, "tools/apex-recall/docs/decision-keys.md");
 const SUBNET_PLAN_SCHEMA = path.join(ROOT, "tools/schemas/subnet-plan.schema.json");
-const VNET_PLANNING_REF = path.join(ROOT, ".github/skills/azure-defaults/references/vnet-planning.md");
+const VNET_PLANNING_REF = path.join(ROOT, ".github/skills/apex-azure-defaults/references/vnet-planning.md");
 
 const VNET_REQUIRES_TOKENS = new Set(["vnet-integration", "private-endpoints"]);
 
@@ -78,20 +79,39 @@ function walk(dir) {
   return out;
 }
 
+function isRegisteredKey(registry, key) {
+  if (registry.has(key)) return true;
+  // Support parameterized registry patterns such as `challenger_invocations_<step>`
+  for (const regKey of registry) {
+    if (!regKey.includes("<step>")) continue;
+    const prefix = regKey.slice(0, regKey.indexOf("<step>"));
+    if (key.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
 function extractKeyUsages(text) {
-  // Matches:  apex-recall decide ... --key <name>
-  // Captures any non-whitespace token after --key (until end-of-arg).
+  // Matches:
+  //   1. apex-recall decide ... --key <name>
+  //   2. apex-recall transition ... --decision <name>=<value>
+  //   3. decisions.<name> references in agent/skill instructions
   const usages = [];
-  const re = /apex-recall\s+decide[^\n]*--key\s+([A-Za-z0-9_\-<>{}]+)/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const key = m[1];
-    // Allow agents to use placeholders like <k>, <key>, ${k}, or the
-    // literal `<key>` from documentation — these are template forms,
-    // not real key usages. Skip them.
-    if (/^[<{].*[>}]$/.test(key)) continue;
-    if (key === "k" || key === "key") continue;
-    usages.push(key);
+  const patterns = [
+    /apex-recall\s+decide[^\n]*--key\s+([A-Za-z0-9_\-<>{}]+)/g,
+    /apex-recall\s+transition[^\n]*--decision\s+([A-Za-z0-9_\-<>{}]+)=/g,
+    /(?<![A-Za-z0-9_-])decisions\.([a-z][a-z0-9_<>]*)(?!\.(?:json|md)\b)/g,
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const key = m[1];
+      // Allow agents to use placeholders like <k>, <key>, ${k}, or the
+      // literal `<key>` from documentation — these are template forms,
+      // not real key usages. Skip them.
+      if (/^[<{].*[>}]$/.test(key)) continue;
+      if (key === "k" || key === "key" || key === "toggle") continue;
+      usages.push(key);
+    }
   }
   return usages;
 }
@@ -143,7 +163,7 @@ function validateProjectSubnetPlans() {
   let errors = 0;
   let warnings = 0;
 
-  const states = findArtifactFiles((file) => /^agent-output\/[^/]+\/00-session-state\.json$/.test(file));
+  const states = findArtifactFiles((file) => /^agent-output\/[^/]+\/(?:_meta\/)?00-session-state\.json$/.test(file));
   for (const rel of states) {
     const stateAbs = path.join(ROOT, rel);
     let state;
@@ -178,8 +198,8 @@ function validateProjectSubnetPlans() {
 
     // Trigger-contract warning when subnet_plan absent.
     if (subnetPlan === undefined && whitelist) {
-      const projectDir = path.dirname(stateAbs);
-      const manifestPath = path.join(projectDir, "sku-manifest.json");
+      const projectDir = projectDirFromPath(stateAbs);
+      const manifestPath = resolveContractPath(projectDir, "sku-manifest.json");
       if (!fs.existsSync(manifestPath)) continue;
       let manifest;
       try {
@@ -224,8 +244,8 @@ function main() {
     const usages = extractKeyUsages(text);
     for (const key of usages) {
       seen.add(key);
-      if (!registry.has(key)) {
-        console.error(`❌ ${path.relative(ROOT, f)}: unregistered decision key --key ${key}`);
+      if (!isRegisteredKey(registry, key)) {
+        console.error(`❌ ${path.relative(ROOT, f)}: unregistered decision key ${key}`);
         errors++;
       }
     }

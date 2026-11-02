@@ -28,7 +28,8 @@ This is an internal pipeline subagent — Personality should NOT appear here.
 
 # Goal
 
-Some goal.
+Some goal. Ask first before reading. Wait for user approval before editing.
+Get approval before running tests. Do not mutate anything without approval.
 
 # Stop rules
 
@@ -37,6 +38,7 @@ Expected findings:
 - gpt55-skeleton-001 (missing # Success criteria, # Constraints, # Output)
 - gpt-no-claude-xml-001 × 2 (<context_awareness>, <output_contract>)
 - personality-scoping-001 (Personality on non-user-facing agent)
+- gpt-approval-repetition-001 (approval phrases repeated in # Goal)
 - handoff-enrichment-001 (handoff missing input + output)
 - gpt55-stop-rules-non-empty-001 — actually this section IS non-empty
   because it contains this prose; rule should not fire.

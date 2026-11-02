@@ -2,7 +2,7 @@
 
 Snapshot-diff evidence that the single-pass `comprehensive` lens covers
 ≥ 80 % of the must_fix-eligible line items from each per-lens checklist
-in [.github/skills/azure-defaults/references/adversarial-checklists.md](../../.github/skills/azure-defaults/references/adversarial-checklists.md)
+in [.github/skills/apex-azure-defaults/references/adversarial-checklists.md](../../.github/skills/apex-azure-defaults/references/adversarial-checklists.md)
 for the `architecture` and `implementation-plan` artifact types.
 
 Produced as part of Phase 2 of `plan-simplifyChallengerReviews.prompt.md`.
@@ -42,7 +42,7 @@ in the per-category and per-artifact-type sections of
 | Single-point-of-failure / redundancy story per component          | architecture-reliability | ✓ "Failure mode + SPOF"         |
 | Dependency graph acyclic, ordering explicit                       | architecture-reliability | ✓ "Dependencies acyclic"        |
 | Diagnostic settings planned for every resource                    | architecture-reliability | ✓ "Monitoring + alerts"         |
-| All prices sourced from ARM MCP, not guesses                      | cost-feasibility         | ✓ "Cost — pricing source"       |
+| All prices sourced from Azure MCP (`pricing_get`), not guesses    | cost-feasibility         | ✓ "Cost — pricing source"       |
 | **RI / Savings-Plan math for eligible workloads**                 | cost-feasibility         | ✓ "Cost — RI / Savings-Plan …"  |
 | **`02-cost-estimate.json` baseline reconciliation (≤ 5 % drift)** | cost-feasibility         | ✓ "Cost — 02-cost-estimate …"   |
 | Budget + cost-anomaly alerts configured                           | cost-feasibility         | ✓ "Monitoring + alerts"         |

@@ -17,7 +17,7 @@ import fs from "node:fs";
 import { getAgents } from "./_lib/workspace-index.mjs";
 import { Reporter } from "./_lib/reporter.mjs";
 
-const GRAPH_PATH = ".github/skills/workflow-engine/templates/workflow-graph.json";
+const GRAPH_PATH = ".github/skills/apex-workflow-engine/templates/workflow-graph.json";
 
 const r = new Reporter("Workflow Graph Validator");
 
@@ -29,6 +29,23 @@ function getAgentFiles() {
     agents.add(file.replace(".agent.md", ""));
   }
   return agents;
+}
+
+function canReachInForwardDag(edges, startNode, targetNode) {
+  if (startNode === targetNode) return true;
+  const visited = new Set([startNode]);
+  const queue = [startNode];
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    for (const edge of edges) {
+      if (edge.from === curr && !visited.has(edge.to)) {
+        if (edge.to === targetNode) return true;
+        visited.add(edge.to);
+        queue.push(edge.to);
+      }
+    }
+  }
+  return false;
 }
 
 function detectCycle(nodes, edges) {
@@ -255,17 +272,47 @@ for (const edge of graph.edges) {
 }
 
 // Validate metadata.version
-const expectedMajor = "2";
-const knownVersions = new Set(["2.1", "2.2", "2.3"]);
+const expectedMajors = ["2", "3"];
+const knownVersions = new Set(["2.1", "2.2", "2.3", "2.4", "2.5", "3.0"]);
 const metaVersion = graph.metadata?.version;
+if (metaVersion === "2.5" || metaVersion === "3.0") {
+  const contract = graph.metadata?.risk_acceptance;
+  if (
+    contract?.contract !== "risk-authorization-v1" ||
+    contract?.eligibility !== "non-production-lab" ||
+    contract?.review_verdicts_unchanged !== true ||
+    contract?.readiness_command !== "apex-recall check-gate" ||
+    JSON.stringify(contract?.kit_actions) !== JSON.stringify(["plan-complete", "codegen", "code-complete"]) ||
+    contract?.deployment_requires !== "separate-adopter-tenant-subscription-event-authorization-and-human-approval"
+  )
+    r.error("Invalid lab-only risk authorization contract");
+  if (
+    graph.nodes["step-4"]?.challenger?.exit_criteria !== "all-passes-APPROVED" ||
+    graph.nodes["step-4"]?.challenger?.exception_exit_criteria !==
+      "current-explicit-lab-authorization-and-separate-human-approval"
+  )
+    r.error("Plan review exit criteria must preserve the default gate and distinct explicit exception");
+}
 if (metaVersion === undefined) {
   r.warn("metadata.version missing — older consumers may rely on it");
 } else if (!knownVersions.has(metaVersion)) {
   r.error(
     `metadata.version "${metaVersion}" is not a known version (expected one of: ${[...knownVersions].join(", ")})`,
   );
-} else if (!metaVersion.startsWith(`${expectedMajor}.`)) {
-  r.error(`metadata.version major must be "${expectedMajor}" (got "${metaVersion}")`);
+} else if (!expectedMajors.includes(metaVersion.split(".")[0])) {
+  r.error(`Unsupported metadata.version major: ${metaVersion}`);
+}
+if (metaVersion === "3.0") {
+  const contract = graph.metadata.practical_workflow;
+  if (
+    contract?.contract !== "practical-v1" ||
+    contract.initial_calls_per_artifact_lens !== 1 ||
+    contract.closure_calls_per_artifact_lens !== 1 ||
+    contract.retain_stage_approvals !== true ||
+    contract.new_projects_only !== true ||
+    contract.migration !== "explicit-owner-adoption"
+  )
+    r.error("Practical workflow must preserve bounded review cycles, stage approvals and explicit legacy adoption");
 }
 
 // Validate top-level challenger block (introduced in 2.2)
@@ -338,6 +385,9 @@ if (graph.return_edges !== undefined) {
       }
       if (!nodeIds.has(re.to)) {
         r.error(`${label}: to references non-existent node`);
+      }
+      if (nodeIds.has(re.from) && nodeIds.has(re.to) && !canReachInForwardDag(graph.edges, re.to, re.from)) {
+        r.error(`${label}: target "${re.to}" is not an ancestor/self of "${re.from}" in the forward workflow DAG`);
       }
       if (typeof re.reason !== "string" || re.reason.trim() === "") {
         r.error(`${label}: reason must be a non-empty string`);

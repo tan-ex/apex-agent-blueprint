@@ -1,127 +1,89 @@
 ---
-description: "Enforceable structural and runtime rules for Copilot agent and prompt files"
+description: "Native Copilot agent authoring: valid metadata, direct/delegated interaction, bounded worker outputs and preserved domain/approval contracts."
 applyTo: "**/*.agent.md, **/*.prompt.md"
 ---
 
 # Agent Authoring Standards
 
-Keep this auto-loaded file limited to rules that affect runtime correctness or
-repository validation. For agent creation, structural rewrites, model selection,
-or deep audits, load `.github/skills/agent-authoring/SKILL.md`.
+Target Copilot inside VS Code. The [authoring skill](../skills/apex-agent-authoring/SKILL.md)
+contains optional detailed guidance; do not load its whole reference tree during production work.
 
-## Frontmatter Rules
+## Frontmatter and native tools
 
-- Use valid YAML between `---` delimiters with spaces, not tabs.
-- Keep `description` on one line; block scalars break agent discovery.
-- Keep `description` at or below 350 characters; aim for 300 or fewer.
-- Agent models use array form; prompt models use quoted string form.
-- Agent frontmatter is the canonical model assignment. Mirror it in
-  `tools/registry/agent-registry.json`; catalog assignments are generated.
-- Use only available tool IDs. Delegation uses `agent`, not
-  `agent/runSubagent`.
-- If `agents` is present, include `agent` in `tools`. Leaf subagents set
-  `user-invocable: false` and `agents: []`.
-- Replace deprecated `infer` with `user-invocable` and
-  `disable-model-invocation`.
+- Use valid YAML, available tool IDs and concise descriptions.
+- Active definitions omit model/effort pins; descriptive catalogs and legacy fixture pins remain compatible.
+- Every user-invocable main explicitly includes native `ask_user`.
+  Requirements, Architect, Design and Governance ask material questions when directly selected.
+- Nonempty `agents` requires the `agent` capability. Leaf workers are hidden, `agents: []`,
+  without question, delegation or parent-todo tools.
+- Orchestrator, Deploy, Diagnose and manual Challenger disable implicit model invocation.
+  This source policy is not proof of enforced routing or credential isolation.
+- Active agents do not declare UI `handoffs`. The owner observed no controls with Probe Source
+  selected in Copilot; native task results/explicit role selection are the supported APEX design.
+  Historical handoff fixtures remain compatibility data, not production requirements.
+- Never restore the intentionally retired repository runtime hooks.
 
-Complete field reference:
-[`agent-authoring/references/agent-file-structure.md`](../skills/agent-authoring/references/agent-file-structure.md).
+## Body and interaction
 
-### Frontmatter Description Length
+Keep essential role, goal, success, scope, output and stop rules in the body.
+Use concise Markdown, actual phase inputs/outputs and progressively loaded domain references.
+Do not merely relocate the old complete body to a reference to claim optimization.
+Source length is not a measurement of runtime tokens, latency or quality.
 
-Router descriptions need trigger keywords, not full scope documentation. Move
-extended scope tables into the body or an on-demand reference.
+Use explicit caller `execution_mode: direct|delegated` and actual calling context.
+Direct selection invokes `ask_user` with `message` and `requestedSchema.properties`;
+batch independent fields, validate freeform answers and reuse current decisions.
+Every question-capable main body must retain the essential
+[shared question-form checks](../copilot-instructions.md#user-question-forms):
+distinct contextual titles, no unconditional companion note fields, reuse custom answers and only triggered follow-ups.
+Apply them to every form, not just reviews; never widen a read-only role to write validation scratch.
+Delegated mains return `USER_INPUT_REQUIRED`, stable `request_id`, phase and form to the parent.
+Leaves return their role-specific input failure. No terminal questions or default owner answers.
+Cancel stops; decline never approves. Autopilot may auto-answer, so form/task output is not
+independent human signoff, Azure scope or risk-owner authorization.
 
-## Handoff Rules
+Use actual native task results/handles and only supported same-task continuation.
+No readiness nonce, custom worker execution envelope, model attestation or mandatory raw-log preflight.
+Keep [native worker lifecycle](../skills/apex-workflow-engine/references/worker-readiness.md)
+distinct from domain prerequisites, actual result validation and consequential permission.
 
-- Target an existing agent using its exact frontmatter `name`.
-- Use only `label`, `agent`, `prompt`, `send`, `showContinueOn`, and `model`.
-- Omit `handoffs[].model` when it matches the target agent's own model.
-- Every handoff prompt names its input and expected output.
-- Use the workflow DAG rather than adding an inline handoff taxonomy.
+## Independent review and durable state
 
-Validation details:
-[`workflow-engine/references/handoff-validation-rules.md`](../skills/workflow-engine/references/handoff-validation-rules.md).
+Automatic review uses [one-shot review](../skills/apex-azure-defaults/references/one-shot-review.md).
+Automatic and manual callers share the read-only `challenger-review-subagent`: JSON output,
+no leaf writes or shell/code execution, and parent-owned recording of actual attributed events.
+The reviewer-specific result receipt/freshness contract remains; never fabricate findings or source metadata.
+Missing required reviewer returns the actual failure. Missing/empty output permits one identical-input
+retry within current accounting, then a real recovery decision; no nested main wrapper fallback.
+Preserve review verdicts, unresolved findings and budgets across workers/chats.
+Delegated owners without nested tools return `REVIEW_REQUIRED` to an authorized interactive parent
+for native sibling review, not self-review or a manual wrapper. Parent review recording uses actual identity.
 
-## Model Policy
+Use `apex-recall` for project state and significant domain decisions, not direct state JSON edits.
+Atomic state writes, review evidence and actual human approvals remain independent.
+Changed reviewed inputs require revalidation, not restamping old hashes.
 
-Model selection is intentional. Do not change model order or assignments without
-explicit approval. Reasoning effort is a per-agent or per-call policy, never a
-model-label suffix.
-
-### Reasoning-Effort Policy
-
-Use higher effort for creative, multi-artifact decisions and default or medium
-effort for structured execution. Assignments and rationale:
-[`agent-authoring/references/model-policy.md`](../skills/agent-authoring/references/model-policy.md).
-
-Vendor-specific structure is enforced by
-[`vendor-prompting.instructions.md`](vendor-prompting.instructions.md).
-
-## Body Rules
-
-- The body is prepended to every turn; keep it concise and action-oriented.
-- Follow the limits in `context-optimization.instructions.md`.
-- Move long templates and phase-specific detail to references.
-- Use `#tool:<tool-name>` for tool references.
-- Prefer relative links and verify they resolve from the agent file.
-- Read only skills needed for the current phase; never reread one in-session.
-- Keep embedded templates aligned with their canonical source.
-
-Workflow, hierarchy, delegation, and PR checklist:
-[`agent-authoring/SKILL.md`](../skills/agent-authoring/SKILL.md).
-Context budgets and size limits:
-[`context-optimization.instructions.md`](context-optimization.instructions.md).
-
-## Context Hygiene (Token Efficiency)
-
-### No-Duplicate-Read Rule
-
-Do not call `read_file` again for content already in the conversation. Batch
-independent reads and questions; prefer targeted search for known symbols.
-Detailed guidance:
-[`agent-authoring/references/runtime-guardrails.md`](../skills/agent-authoring/references/runtime-guardrails.md).
+## Artifact and editing rules
 
 ### No-Direct-Markdownlint-on-Agent-Output Rule
 
-Never run Markdown lint directly against `agent-output/**`. Artifact validation
-belongs to the lefthook `artifact-validation` hook and `10-Challenger` review.
-
-### Execution-subagent invocation contract
-
-Execution subagent prompts use `## Inputs`, `## Activities`, and `## Outputs`,
-including a bounded failure mode. Canonical template:
-[`tools/apex-prompts/utility-prompts/execution-subagent.prompt.md`](../../tools/apex-prompts/utility-prompts/execution-subagent.prompt.md).
+Do not lint `agent-output/**` directly. Git artifact-validation and the designated review owner
+enforce that content contract; repository agent runtime hooks are unrelated and retired.
 
 ### No-Shell-Writes-to-Agent-Output Rule
 
-Never write `agent-output/**` through heredocs, redirects, or `tee`. Use file
-editing tools; shell inspection remains read-only.
+Use editing tools, not redirects/heredocs/tee, for generated artifacts. Preserve unrelated user work.
+Validate non-Markdown shapes, actual command results and rendered outputs before completion.
 
 ### Challenger-Subagent Fallback Rule
 
-If direct challenger invocation fails, retry once through `10-Challenger`. If
-that also fails, report the verbatim error and stop; never fabricate an inline
-challenger pass. Full procedure:
-[`agent-authoring/references/runtime-guardrails.md`](../skills/agent-authoring/references/runtime-guardrails.md#challenger-fallback).
-
-## Decision Logging
-
-Record significant architecture, SKU, deployment, IaC, security, networking, or
-trade-off decisions through `apex-recall`; omit minor implementation choices.
-Commands and decision shape:
-[`agent-authoring/references/decision-logging.md`](../skills/agent-authoring/references/decision-logging.md).
-
-## Model-Prompt Alignment
-
-Classify behavior from the first frontmatter model. Align prompt and target-agent
-models, avoid redundant handoff overrides, and follow the matching vendor rules:
-
-- [`vendor-prompting.instructions.md`](vendor-prompting.instructions.md)
-- [`vendor-prompting/references/family-support.md`](../skills/vendor-prompting/references/family-support.md)
-- [`vendor-prompting/references/cross-model-rules.md`](../skills/vendor-prompting/references/cross-model-rules.md)
+Unavailable reviewer capability blocks the affected phase. Do not substitute self-review,
+silently widen allowlists or request predetermined APPROVED/zero findings.
+Optional manual Challenger is not an automatic fallback or fresh review allowance.
 
 ## Verification
 
-Run `npm run validate:agents`, `npm run lint:vendor-prompting`, and
-`npm run validate:model-consistency` after changing an agent or prompt.
+Use focused native contract/frontmatter tests, then `npm run validate:agents`,
+`npm run validate:skills`, `npm run validate:model-consistency` and relevant domain checks.
+Update callers/tests/docs when body interaction or ownership changes.
+Static validation is not native runtime certification; record exactly what was actually exercised.
