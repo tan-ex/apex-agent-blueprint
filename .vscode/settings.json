@@ -3,27 +3,6 @@
   "chat.useNestedAgentsMdFiles": true,
   "chat.useClaudeMdFile": false,
   "chat.customAgentInSubagent.enabled": true,
-  "chat.agentFilesLocations": {
-    ".github/agents": true,
-    ".github/agents/_subagents": true,
-    "~/.copilot/agents": false,
-    "~/.claude/agents": false
-  },
-  "chat.agentSkillsLocations": {
-    ".github/skills": true,
-    "~/.copilot/skills": false,
-    "~/.claude/skills": false
-  },
-  "chat.instructionsFilesLocations": {
-    ".github/instructions": true,
-    "~/.copilot/instructions": false,
-    "~/.claude/rules": false
-  },
-  "chat.hookFilesLocations": {
-    ".github/hooks/tool-guardian": true,
-    ".github/hooks/subagent-validation": true
-  },
-  "chat.useCustomAgentHooks": true,
   "chat.useAgentSkills": true,
   "json.schemas": [
     {
@@ -35,7 +14,7 @@
       "url": "./tools/schemas/governance-baseline.schema.json"
     },
     {
-      "fileMatch": [".github/skills/vendor-prompting/rules.json"],
+      "fileMatch": [".github/skills/apex-vendor-prompting/rules.json"],
       "url": "./tools/schemas/vendor-prompting-rules.schema.json"
     },
     {
@@ -49,13 +28,17 @@
     {
       "fileMatch": [
         "agent-output/*/sku-manifest.json",
-        ".github/skills/azure-artifacts/templates/sku-manifest.template.json"
+        ".github/skills/apex-azure-artifacts/templates/sku-manifest.template.json"
       ],
       "url": "./tools/schemas/sku-manifest.schema.json"
     },
     {
-      "fileMatch": ["agent-output/*/08-iteration-log.json", "agent-output/_bench/*/*/08-iteration-log.json"],
-      "url": "./tools/schemas/iteration-log.schema.json"
+      "fileMatch": ["tools/registry/upstream-skill-pins.json"],
+      "url": "./tools/schemas/upstream-skill-pins.schema.json"
+    },
+    {
+      "fileMatch": ["tools/registry/npm-audit-exceptions.json"],
+      "url": "./tools/schemas/npm-audit-exceptions.schema.json"
     }
   ],
   "editor.formatOnSave": true,
@@ -87,9 +70,5 @@
     "editor.tabSize": 4
   },
   "python.terminal.useEnvFile": true,
-  "chat.mcp.serverSampling": {
-    "apex/.vscode/mcp.json: azure-mcp": {
-      "allowedDuringChat": true
-    }
-  }
+  "chat.mcp.workspaceRootConfig.enabled": true
 }

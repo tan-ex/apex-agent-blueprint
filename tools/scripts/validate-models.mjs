@@ -2,25 +2,19 @@
 /**
  * Model Validators (consolidated)
  *
- * Three read-only validators for the agent ↔ registry ↔ model-catalog
- * triangle, selectable via `--only`:
+ * Read-only validators for optional legacy model pins and deprecated model
+ * deny-list checks, selectable via `--only`:
  *
- *   --only=catalog      Catalog invariants (.github/model-catalog.json):
- *                       every referenced label is declared; the
- *                       `assignments` block matches the generator output;
- *                       deprecated models are absent from active use.
- *   --only=consistency  Every agent's frontmatter `model` equals the
- *                       registry `model` for the same agent.
+ *   --only=consistency  Explicit legacy `model` pins match across
+ *                       frontmatter and registry; both may be absent.
  *   --only=deprecated   No deprecated model label reappears in agent
  *                       definitions, prompt files, or the registry.
  *
- * With no `--only` flag all three run in sequence and the process exits
- * non-zero if any failed. The generator (`generate-model-catalog.mjs`)
- * is a separate mutating tool and is intentionally NOT part of this file.
+ * With no `--only` flag both run in sequence and the process exits
+ * non-zero if any failed.
  *
  * @example
- *   node tools/scripts/validate-models.mjs                 # all three
- *   node tools/scripts/validate-models.mjs --only=catalog
+ *   node tools/scripts/validate-models.mjs                 # both modes
  *   node tools/scripts/validate-models.mjs --only=consistency
  *   node tools/scripts/validate-models.mjs --only=deprecated
  */
@@ -29,11 +23,10 @@ import path from "node:path";
 import { Reporter } from "./_lib/reporter.mjs";
 import { getAgents } from "./_lib/workspace-index.mjs";
 import { REGISTRY_PATH } from "./_lib/paths.mjs";
-import { normalizeModel, walkRegistry, buildAssignments } from "./_lib/model-helpers.mjs";
+import { DEFAULT_MODEL_CATALOG, modelLabels, walkRegistry } from "./_lib/model-helpers.mjs";
 import { readJsonCached } from "./_lib/json.mjs";
 
 const ROOT = process.cwd();
-const CATALOG_PATH = path.join(ROOT, ".github", "model-catalog.json");
 
 /**
  * Print a Reporter's pass/fail message (mirroring `Reporter.exitOnError`
@@ -51,91 +44,6 @@ function finishMode(r, passMsg, failMsg) {
     console.log(`\n✅ ${passMsg}`);
   }
   return true;
-}
-
-// ── Mode: catalog ────────────────────────────────────────────────────────────
-
-function collectRegistryModels(registry) {
-  const out = new Map(); // model -> [origin labels]
-  for (const [label, entry] of walkRegistry(registry)) {
-    const m = normalizeModel(entry.model);
-    if (!m) continue;
-    if (!out.has(m)) out.set(m, []);
-    out.get(m).push(label);
-  }
-  return out;
-}
-
-function collectFrontmatterModels() {
-  const out = new Map();
-  for (const [file, a] of getAgents()) {
-    const m = normalizeModel(a.frontmatter?.model);
-    if (!m) continue;
-    if (!out.has(m)) out.set(m, []);
-    out.get(m).push(file);
-  }
-  return out;
-}
-
-function runCatalog() {
-  const r = new Reporter("Model Catalog Validator");
-  r.header();
-
-  if (!fs.existsSync(CATALOG_PATH)) {
-    r.error("model-catalog.json", `not found at ${CATALOG_PATH}`);
-    r.summary();
-    return finishMode(r, "Model catalog validation passed", "Model catalog validation failed — see errors above");
-  }
-  const catalog = readJsonCached(CATALOG_PATH);
-  const declared = new Set(Object.keys(catalog.models || {}));
-  const deprecated = new Set(
-    Object.entries(catalog.models || {})
-      .filter(([, v]) => v?.deprecated === true)
-      .map(([k]) => k),
-  );
-
-  console.log("  Check 1: referenced labels exist in catalog.models");
-  const fmModels = collectFrontmatterModels();
-  const registry = readJsonCached(REGISTRY_PATH);
-  const regModels = collectRegistryModels(registry);
-  for (const [model, origins] of fmModels) {
-    r.tick();
-    if (!declared.has(model)) {
-      r.error(`frontmatter model "${model}"`, `not declared in catalog.models — used by ${origins.join(", ")}`);
-    }
-  }
-  for (const [model, origins] of regModels) {
-    r.tick();
-    if (!declared.has(model)) {
-      r.error(`registry model "${model}"`, `not declared in catalog.models — used by ${origins.join(", ")}`);
-    }
-  }
-
-  console.log("  Check 2: assignments block matches frontmatter");
-  const expected = buildAssignments();
-  const actual = catalog.assignments;
-  r.tick();
-  if (!actual) {
-    r.error("assignments", "missing from catalog — run `node tools/scripts/generate-model-catalog.mjs`");
-  } else if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    r.error("assignments", "out of sync with frontmatter — run `node tools/scripts/generate-model-catalog.mjs`");
-  }
-
-  console.log("  Check 3: deprecated models absent from active assignments");
-  for (const dep of deprecated) {
-    r.tick();
-    const fmHits = fmModels.get(dep) || [];
-    const regHits = regModels.get(dep) || [];
-    if (fmHits.length || regHits.length) {
-      r.error(
-        `deprecated model "${dep}"`,
-        `still in active use — frontmatter: ${fmHits.join(", ") || "none"}; registry: ${regHits.join(", ") || "none"}`,
-      );
-    }
-  }
-
-  r.summary();
-  return finishMode(r, "Model catalog validation passed", "Model catalog validation failed — see errors above");
 }
 
 // ── Mode: consistency ────────────────────────────────────────────────────────
@@ -173,25 +81,32 @@ function checkConsistencyEntry(r, key, entry, lookup) {
     r.error(`Agent "${key}"`, `agent file not found in workspace index: ${registryAgentPath}`);
     return;
   }
-  const yamlModel = normalizeModel(fm.model);
-  const regModel = normalizeModel(entry.model);
+  let yamlModels;
+  let regModels;
+  try {
+    yamlModels = modelLabels(fm.model);
+    regModels = modelLabels(entry.model);
+  } catch (error) {
+    r.error(`Agent "${key}"`, error.message);
+    return;
+  }
 
-  if (!yamlModel) {
-    r.error(`Agent "${key}"`, `frontmatter is missing \`model\` field`);
+  if (yamlModels.length === 0 && regModels.length === 0) return;
+  if (yamlModels.length === 0 || regModels.length === 0) {
+    r.error(`Agent "${key}"`, "legacy model pin must either be absent from both sources or present in both");
     return;
   }
-  if (!regModel) {
-    r.error(`Agent "${key}"`, `registry entry is missing \`model\` field`);
-    return;
-  }
-  if (yamlModel !== regModel) {
-    r.error(`Agent "${key}"`, `frontmatter model "${yamlModel}" does not equal registry model "${regModel}"`);
+  if (JSON.stringify(yamlModels) !== JSON.stringify(regModels)) {
+    r.error(
+      `Agent "${key}"`,
+      `frontmatter models ${JSON.stringify(yamlModels)} do not equal registry models ${JSON.stringify(regModels)}`,
+    );
   }
 }
 
 function runConsistency() {
   const r = new Reporter("Model Consistency Validator");
-  console.log("\n📋 Validating model consistency (frontmatter ≡ registry)...\n");
+  console.log("\n📋 Validating optional legacy model-pin consistency...\n");
 
   if (!fs.existsSync(REGISTRY_PATH)) {
     r.error(`Agent registry not found at ${REGISTRY_PATH}`);
@@ -225,20 +140,16 @@ function runConsistency() {
 
 // ── Mode: deprecated ─────────────────────────────────────────────────────────
 
-const SCAN_GLOBS = [".github/agents", "tools/apex-prompts", "tools/tests/prompts"];
+const SCAN_GLOBS = [".github/agents", "tools/tests/prompts"];
 const ALLOWED_FILES = new Set([
-  ".github/model-catalog.json",
   "CHANGELOG.md",
   "docs/CHANGELOG.md",
-  "site/src/content/docs/project/changelog.md",
   "QUALITY_SCORE.md",
-  ".github/skills/docs-writer/references/freshness-checklist.md",
   "tools/scripts/validate-models.mjs",
 ]);
 
 function loadDeprecatedModels() {
-  const catalog = readJsonCached(CATALOG_PATH);
-  const models = catalog.models ?? {};
+  const models = DEFAULT_MODEL_CATALOG.models ?? {};
   return Object.entries(models)
     .filter(([, v]) => v?.deprecated === true)
     .map(([name]) => name);
@@ -287,11 +198,11 @@ function runDeprecated() {
   r.header();
   const deprecated = loadDeprecatedModels();
   if (deprecated.length === 0) {
-    console.log("  ℹ️  No deprecated models in catalog. Nothing to enforce.");
+    console.log("  ℹ️  No deprecated models configured. Nothing to enforce.");
     r.summary();
     return true;
   }
-  console.log(`  Deprecated labels (from catalog): ${deprecated.join(", ")}`);
+  console.log(`  Deprecated labels: ${deprecated.join(", ")}`);
 
   const files = collectDeprecatedScanFiles();
   for (const f of files) {
@@ -316,7 +227,6 @@ function runDeprecated() {
 // ── Dispatcher ───────────────────────────────────────────────────────────────
 
 const MODES = {
-  catalog: runCatalog,
   consistency: runConsistency,
   deprecated: runDeprecated,
 };

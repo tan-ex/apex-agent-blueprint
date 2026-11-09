@@ -24,6 +24,9 @@
  *   7. plan_ref.sha256 + l1m_ref.sha256 match the actual file content when
  *      the referenced files exist on disk (WARN when files missing — common
  *      during local dev before plan is finalised).
+ *   8. Private paths (only for resources declaring phase/consumes/target):
+ *      a depends_on target may not be in a later phase, and a resource that
+ *      consumes a resource with a private endpoint must depend_on one.
  *
  * Usage:
  *   node tools/scripts/validate-iac-contract.mjs
@@ -37,9 +40,11 @@ import { globSync } from "node:fs";
 import { loadValidator } from "./_lib/ajv-validator.mjs";
 import { Reporter } from "./_lib/reporter.mjs";
 import { readJson, sha256File } from "./_lib/json.mjs";
+import { projectDirFromPath, resolveProjectFile } from "./_lib/project-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SCHEMA_PATH = path.join(ROOT, "tools/schemas/iac-contract.schema.json");
+const STAGES = ["deploy", "post-deploy", "go-live"];
 
 function checkUniqueLogicalNames(data, fileRel, r) {
   const seen = new Set();
@@ -104,6 +109,181 @@ function checkDiagnosticsParam(data, fileRel, r) {
   }
 }
 
+function checkScheduledActions(data, fileRel, reporter) {
+  for (const resource of data.resources ?? []) {
+    if (resource.type.toLowerCase() !== "microsoft.costmanagement/scheduledactions") continue;
+    const deployment = resource.deployment;
+    const label = `resources["${resource.logical_name}"].deployment`;
+    if (!deployment) {
+      reporter.error(fileRel, `${label} is required: record scheduled-action kind, scope and provider constraints`);
+      continue;
+    }
+    if (deployment.kind !== "InsightAlert") continue;
+    if (deployment.scope !== "subscription")
+      reporter.error(fileRel, `${label}.scope must be subscription for InsightAlert`);
+    if (data.iac_tool === "Bicep" && deployment.module_scope !== "subscription") {
+      reporter.error(
+        fileRel,
+        `${label}.module_scope must be subscription; an RG-scoped module cannot host InsightAlert`,
+      );
+    }
+    if (!deployment.display_name_max_length)
+      reporter.error(fileRel, `${label} must bound displayName to 25 characters`);
+    if (deployment.view_scope !== "same-subscription")
+      reporter.error(fileRel, `${label} must bind the view to the same subscription`);
+    if (!deployment.schedule) {
+      reporter.error(
+        fileRel,
+        `${label}.schedule must require deployment-date UTC midnight and a window of at most 365 days`,
+      );
+    }
+  }
+}
+
+function checkCapabilityReadiness(data, fileRel, reporter, required, stage = "deploy") {
+  if (!data.capability_checks) {
+    if (required) reporter.error(fileRel, "Capability coverage absent; owner migration required for readiness mode");
+    return;
+  }
+  // A capability without `blocks` blocks every stage, which is the behaviour before the field existed.
+  const blocksStage = (capability) =>
+    !capability.blocks?.length || capability.blocks.some((blocked) => STAGES.indexOf(blocked) <= STAGES.indexOf(stage));
+  const checks = new Map(data.capability_checks.map((entry) => [entry.id, entry]));
+  const visit = (capability, trail = new Set()) => {
+    if (trail.has(capability.id)) {
+      reporter.error(fileRel, `Capability dependency cycle: ${capability.id}`);
+      return;
+    }
+    const next = new Set([...trail, capability.id]);
+    for (const reference of capability.dependencies) {
+      const id = reference.startsWith("capability:") ? reference.slice("capability:".length) : reference;
+      const dependency = checks.get(id);
+      if (!dependency && reference.startsWith("capability:"))
+        reporter.error(fileRel, `Missing capability dependency: ${id}`);
+      if (dependency) {
+        if (dependency.status !== "designed")
+          reporter.error(fileRel, `Required path ${capability.id} depends on ${dependency.status} capability ${id}`);
+        else visit(dependency, next);
+      }
+    }
+  };
+  const seen = new Set();
+  for (const capability of data.capability_checks) {
+    if (seen.has(capability.id)) reporter.error(fileRel, `Duplicate capability: ${capability.id}`);
+    seen.add(capability.id);
+    if (capability.status === "designed" && (capability.required_now || capability.security_obligation))
+      visit(capability);
+    if ((capability.required_now || capability.security_obligation) && capability.status === "unresolved") {
+      if (blocksStage(capability)) reporter.error(fileRel, `Required design path unresolved: ${capability.id}`);
+      else {
+        reporter.warn(
+          fileRel,
+          `Capability ${capability.id} is unresolved and blocks ${capability.blocks.join(", ")}; not blocking stage ${stage}`,
+        );
+      }
+    }
+    if (
+      capability.status === "deferred" &&
+      (capability.security_obligation || !capability.approval_ref || !capability.revisit_condition)
+    ) {
+      reporter.error(
+        fileRel,
+        `Invalid deferral: ${capability.id}; security cannot be deferred, other deferrals require approval and revisit condition`,
+      );
+    }
+    if (capability.status === "designed" && (!capability.dependencies.length || !capability.evidence.length)) {
+      reporter.error(fileRel, `Designed capability lacks dependencies/evidence: ${capability.id}`);
+    }
+    if (capability.runtime_status === "verified" && !capability.evidence.length) {
+      reporter.error(fileRel, `Runtime verification lacks evidence: ${capability.id}`);
+    }
+  }
+}
+
+function checkPhaseParameter(data, fileRel, r) {
+  for (const param of data.params ?? []) {
+    if ((param.name === "phase" || param.name === "deployment_phase") && "default" in param) {
+      r.error(
+        fileRel,
+        `params["${param.name}"] must be required with no default: a default deploys every phase when it is omitted and bypasses the per-phase approval gates`,
+      );
+    }
+  }
+}
+
+function checkBicepOutputLimit(data, fileRel, r) {
+  if (data.iac_tool !== "Bicep") return;
+  const count = Array.isArray(data.output_contract) ? data.output_contract.length : 0;
+  if (count > 64) {
+    r.error(
+      fileRel,
+      `output_contract[] has ${count} entries, exceeding Azure ARM/Bicep's hard limit of 64 outputs per template. Group resource IDs into structured object outputs (e.g. phaseOutputs / resourceIds) so output_contract[] has at most 64 entries.`,
+    );
+  }
+}
+
+function validateSecurityRuleNames(rules, ownerLabel, fileRel, r) {
+  if (!Array.isArray(rules)) return;
+  const seen = new Set();
+  for (const rule of rules) {
+    const rawName = typeof rule?.name === "string" ? rule.name.trim() : "";
+    if (!rawName) continue;
+    const key = rawName.toLowerCase();
+    if (seen.has(key)) {
+      r.error(
+        fileRel,
+        `${ownerLabel} has duplicate NSG securityRules[].name "${rawName}" (Azure ARM requires unique rule names across both Inbound and Outbound rules within an NSG)`,
+      );
+    }
+    seen.add(key);
+  }
+}
+
+function checkNsgRuleUniqueness(data, fileRel, r) {
+  for (const res of data.resources ?? []) {
+    const rules = res.inputs?.securityRules ?? res.properties?.securityRules ?? res.parameters?.securityRules;
+    validateSecurityRuleNames(rules, `resources["${res.logical_name}"]`, fileRel, r);
+  }
+  const contractDir = projectDirFromPath(path.join(ROOT, fileRel));
+  for (const candidateRel of [
+    "04-resource-specifications.json",
+    "_meta/04-resource-specifications.json",
+    "_meta/scratch/04-resource-specifications.json",
+  ]) {
+    const specPath = path.join(contractDir, candidateRel);
+    if (!fs.existsSync(specPath)) continue;
+    try {
+      const spec = readJson(specPath);
+      for (const res of spec.resources ?? []) {
+        const rules = res.inputs?.securityRules ?? res.properties?.securityRules ?? res.parameters?.securityRules;
+        validateSecurityRuleNames(rules, `${candidateRel} resources["${res.logical_name}"]`, fileRel, r);
+      }
+    } catch {
+      // Malformed companion files are reported by their own validators.
+    }
+  }
+  const planRef = data.plan_ref?.path;
+  if (planRef) {
+    let planPath = path.resolve(path.dirname(path.join(ROOT, fileRel)), planRef);
+    if (!fs.existsSync(planPath)) planPath = resolveProjectFile(contractDir, planRef);
+    if (fs.existsSync(planPath)) {
+      const planText = fs.readFileSync(planPath, "utf8");
+      const regex = /`securityRules`\s*—\s*`array`\s*—\s*`(\[[^\n`]+\])`/g;
+      let match;
+      let idx = 0;
+      while ((match = regex.exec(planText)) !== null) {
+        idx += 1;
+        try {
+          const parsed = JSON.parse(match[1]);
+          validateSecurityRuleNames(parsed, `${planRef} securityRules[${idx}]`, fileRel, r);
+        } catch {
+          // Ignore non-JSON expressions in Markdown prose.
+        }
+      }
+    }
+  }
+}
+
 function checkDependsOn(data, fileRel, r) {
   const names = new Set((data.resources ?? []).map((res) => res.logical_name));
   const graph = new Map();
@@ -120,6 +300,46 @@ function checkDependsOn(data, fileRel, r) {
     graph.set(res.logical_name, deps);
   }
   detectCycles(graph, fileRel, r);
+}
+
+// Applies only to resources that declare `phase`, `consumes` or `target`; contracts without them are unchanged.
+function checkPrivatePaths(data, fileRel, r) {
+  const resources = new Map((data.resources ?? []).map((res) => [res.logical_name, res]));
+  const endpointsByTarget = new Map();
+  for (const res of resources.values()) {
+    if (res.target === undefined) continue;
+    if (res.type !== "Microsoft.Network/privateEndpoints") {
+      r.error(fileRel, `resources["${res.logical_name}"].target is only valid on Microsoft.Network/privateEndpoints`);
+    } else if (!resources.has(res.target)) {
+      r.error(fileRel, `resources["${res.logical_name}"].target "${res.target}" not in resources[]`);
+    } else {
+      endpointsByTarget.set(res.target, [...(endpointsByTarget.get(res.target) ?? []), res.logical_name]);
+    }
+  }
+  for (const res of resources.values()) {
+    for (const dep of res.depends_on ?? []) {
+      const earlier = resources.get(dep);
+      if (res.phase !== undefined && earlier?.phase !== undefined && earlier.phase > res.phase) {
+        r.error(
+          fileRel,
+          `resources["${res.logical_name}"] (phase ${res.phase}) depends_on "${dep}" in later phase ${earlier.phase}`,
+        );
+      }
+    }
+    for (const consumed of res.consumes ?? []) {
+      if (consumed === res.logical_name || !resources.has(consumed)) {
+        r.error(fileRel, `resources["${res.logical_name}"].consumes "${consumed}" must name another resource`);
+        continue;
+      }
+      const endpoints = endpointsByTarget.get(consumed) ?? [];
+      if (endpoints.length > 0 && !endpoints.some((endpoint) => (res.depends_on ?? []).includes(endpoint))) {
+        r.error(
+          fileRel,
+          `resources["${res.logical_name}"] consumes "${consumed}" but does not depends_on its private endpoint (${endpoints.join(", ")}); create the endpoint first`,
+        );
+      }
+    }
+  }
 }
 
 function detectCycles(graph, fileRel, r) {
@@ -149,10 +369,13 @@ function detectCycles(graph, fileRel, r) {
 }
 
 function checkRefHashes(data, fileRel, r) {
+  const fileDir = path.dirname(path.join(ROOT, fileRel));
+  const pdir = projectDirFromPath(fileDir);
   for (const refKey of ["plan_ref", "l1m_ref"]) {
     const ref = data[refKey];
     if (!ref || !ref.sha256) continue;
-    const refPath = path.resolve(path.dirname(path.join(ROOT, fileRel)), ref.path);
+    let refPath = path.resolve(fileDir, ref.path);
+    if (!fs.existsSync(refPath)) refPath = resolveProjectFile(pdir, ref.path);
     if (!fs.existsSync(refPath)) {
       r.warn(fileRel, `${refKey}.path not found on disk: ${ref.path} (skipping hash check)`);
       continue;
@@ -168,19 +391,38 @@ function checkRefHashes(data, fileRel, r) {
 }
 
 function defaultGlobs() {
-  return ["agent-output/*/04-iac-contract.json"];
+  return ["agent-output/*/04-iac-contract.json", "agent-output/*/contracts/04-iac-contract.json"];
 }
 
 function main() {
   const r = new Reporter("IaC Contract Validator");
   r.header();
   const validate = loadValidator(SCHEMA_PATH);
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes("--help")) {
+    console.log(
+      "Usage: validate-iac-contract.mjs [artifact-path-or-glob ...] [--readiness] [--stage deploy|post-deploy|go-live]\nNo paths: scan project contracts. Readiness requires capability coverage; it does not grant approval.\n--stage (default deploy): an unresolved capability fails only when its `blocks` list includes that stage or an earlier one.",
+    );
+    return;
+  }
+  const readiness = rawArgs.includes("--readiness");
+  const stageIndex = rawArgs.indexOf("--stage");
+  const stage = stageIndex >= 0 ? rawArgs[stageIndex + 1] : "deploy";
+  if (!STAGES.includes(stage)) {
+    r.error("--stage", `must be one of ${STAGES.join(", ")}`);
+    r.summary();
+    r.exitOnError("Invalid --stage");
+    return;
+  }
+  const args = rawArgs.filter(
+    (arg, index) => arg !== "--readiness" && arg !== "--stage" && (stageIndex < 0 || index !== stageIndex + 1),
+  );
   const patterns = args.length > 0 ? args : defaultGlobs();
 
   let files = [];
   for (const pat of patterns) {
     const matched = globSync(pat, { cwd: ROOT, absolute: true });
+    if (args.length > 0 && matched.length === 0) r.error(pat, "Explicit target matched no files; use an artifact path");
     files = files.concat(matched);
   }
   files = [...new Set(files)];
@@ -188,7 +430,8 @@ function main() {
   if (files.length === 0) {
     r.info("(no 04-iac-contract.json files found)");
     r.summary();
-    process.exit(0);
+    r.exitOnError("No IaC contracts selected");
+    return;
   }
 
   for (const filePath of files) {
@@ -207,16 +450,25 @@ function main() {
       }
       continue;
     }
+    const errorsBefore = r.errors;
     checkUniqueLogicalNames(data, fileRel, r);
     checkModuleRefs(data, fileRel, r);
     checkIdentity(data, fileRel, r);
     checkDiagnosticsParam(data, fileRel, r);
+    checkScheduledActions(data, fileRel, r);
+    checkCapabilityReadiness(data, fileRel, r, readiness, stage);
+    checkPhaseParameter(data, fileRel, r);
+    checkBicepOutputLimit(data, fileRel, r);
+    checkNsgRuleUniqueness(data, fileRel, r);
     checkDependsOn(data, fileRel, r);
+    checkPrivatePaths(data, fileRel, r);
     checkRefHashes(data, fileRel, r);
-    r.ok(
-      fileRel,
-      `iac-contract ${data.schema_version} (${data.resources.length} resources, iac_tool=${data.iac_tool})`,
-    );
+    if (r.errors === errorsBefore) {
+      r.ok(
+        fileRel,
+        `iac-contract ${data.schema_version} (${data.resources.length} resources, iac_tool=${data.iac_tool})`,
+      );
+    }
   }
 
   r.summary();

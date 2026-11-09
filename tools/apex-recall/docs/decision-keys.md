@@ -39,12 +39,24 @@ Specifically:
 
 | Key             | Valid values                                                                                    | Default behaviour if absent     | Set by          | Read by                                             |
 | --------------- | ----------------------------------------------------------------------------------------------- | ------------------------------- | --------------- | --------------------------------------------------- |
-| `iac_tool`      | `Bicep` \| `Terraform`                                                                          | Orchestrator prompts the user   | 01-Orchestrator | 05-IaC Planner, 06b/06t CodeGen, 07b/07t Deploy     |
-| `region`        | Azure region ID (e.g. `swedencentral`)                                                          | `swedencentral`                 | 02-Requirements | All Azure-resource-emitting agents                  |
-| `complexity`    | `low` \| `medium` \| `high`                                                                     | `medium`                        | 02-Requirements | Challenger lens selection                           |
-| `review_depth`  | `default` \| `deep`                                                                             | `default` (single-pass reviews) | 01-Orchestrator | All adversarial review invocations                  |
-| `skip_design`   | `true` \| `false`                                                                               | `false` (Design runs)           | 01-Orchestrator | 03-Architect approval gate routing message          |
-| `relational_db` | `azure-sql` \| `postgresql-flex` \| `mysql-flex` \| `sql-managed-instance` \| `none` \| `other` | n/a (Phase 3d question)         | 02-Requirements | 03-Architect (SKU), 05-IaC Planner, 06b/06t CodeGen |
+| `iac_tool`          | `Bicep` \| `Terraform`                                                                          | Orchestrator prompts the user   | 01-Orchestrator                      | 05-IaC Planner, 06b/06t CodeGen, 07b/07t Deploy     |
+| `workflow_contract` | `practical-v1` \| `legacy`                                                                      | `legacy` (existing projects)    | `apex-recall init`, 01-Orchestrator  | All workflow agents                                 |
+| `workflow_mode` | `assessment` | Existing numeric delivery workflow | Recall assessment start/adopt from explicit scope approval | Profile routing, terminal handoff and assessment readiness |
+| `region`            | Azure region ID (e.g. `swedencentral`)                                                          | `swedencentral`                 | 02-Requirements                      | All Azure-resource-emitting agents                  |
+| `complexity`        | `simple` \| `standard` \| `complex`                                                             | `standard`                      | 01-Orchestrator, 02-Requirements     | Challenger lens selection                           |
+| `review_depth`      | `default` \| `deep`                                                                             | `default` (single-pass reviews) | 01-Orchestrator                      | All adversarial review invocations                  |
+| `assessment_exit` | `assessment_only` \| `implementation` | Strict implementation prerequisites; no implicit assessment-only waiver | 03-Architect, 01-Orchestrator from actual owner choice | Recall completion; policy feasibility |
+| `assessment_cost_status` | `not_assessed` | Normal pricing gate applies | 03-Architect when no evidence is priceable | Recall validates the NOT_ASSESSED contract; both independent reviews remain |
+| `governance_depth`  | `light` \| `full`                                                                               | `light`                         | 01-Orchestrator                      | 04g-Governance, 05-IaC Planner                      |
+| `identity_resolution` | `auto` \| `manual`                                                                            | `auto`                          | 01-Orchestrator                      | 05-IaC Planner, 06b/06t CodeGen                     |
+| `diagnostics_strategy` | `avm` \| `module` \| `auto`                                                                  | `auto`                          | 01-Orchestrator                      | 06b/06t CodeGen                                     |
+| `skip_design`       | `true` \| `false`                                                                               | `false` (Design runs)           | 01-Orchestrator                      | 03-Architect approval gate routing message          |
+| `compliance`        | string (e.g. `GDPR`, `none`, or framework list)                                                 | `""`                            | 02-Requirements                      | 03-Architect, 04g-Governance, 05-IaC Planner        |
+| `budget`            | string (e.g. `1000 USD/month`)                                                                  | `""`                            | 02-Requirements                      | 03-Architect, 05-IaC Planner                        |
+| `architecture_pattern` | string (e.g. `N-Tier`, `Hub-Spoke`)                                                          | `""`                            | 03-Architect                         | 04-Design, 05-IaC Planner                           |
+| `challenger_skip`   | list of `{step, reason, recorded}`                                                              | n/a (no skips)                  | apex-recall (`--allow-missing-challenger`) | Audit only                                    |
+| `order_overrides`   | list of `{step, problem, reason, recorded}`                                                     | n/a (no overrides)              | apex-recall (`--allow-out-of-order`) | Audit only                                          |
+| `relational_db`     | `azure-sql` \| `postgresql-flex` \| `mysql-flex` \| `sql-managed-instance` \| `none` \| `other` | n/a (Phase 3d question)         | 02-Requirements                      | 03-Architect (SKU), 05-IaC Planner, 06b/06t CodeGen |
 
 ### Challenger-loop keys (Plan 01 Phase 2b)
 
@@ -63,14 +75,14 @@ The `<step>` suffix is the integer step number (`1`, `2`, `3_5`, `4`).
 
 | Key                       | Valid values                                                              | Default behaviour if absent        | Set by          | Read by                                  |
 | ------------------------- | ------------------------------------------------------------------------- | ---------------------------------- | --------------- | ---------------------------------------- |
-| `sku_confirmation_status` | `approved` \| `revising`                                                  | Architect raises 6a gate           | 03-Architect    | 03-Architect step 7 pricing precondition |
-| `budget_cap_known`        | `true` \| `false`                                                         | `false` (skip budget gate)         | 02-Requirements | 03-Architect step 9a budget gate         |
+| `sku_confirmation_status` | `approved` \| `revising` | 03-Architect raises 6a for implementation planning; Assessment skips | 03-Architect | 03-Architect pricing precondition |
+| `budget_cap_known`        | `true` \| `false` | `false` (Assessment skips; implementation planning applies 9a) | 02-Requirements | 03-Architect step 9a budget gate |
 | `budget_decision`         | `approve_overage` \| `revise_sku` \| `revise_reqs`                        | n/a (only set when 9a fires)       | 03-Architect    | 03-Architect routing                     |
 | `budget_revise_count`     | integer 0..3                                                              | `0`                                | 03-Architect    | 03-Architect 3-iteration cap             |
 | `cost_feasibility_review` | `run` \| `skip`                                                           | n/a (only set after lens decision) | 03-Architect    | 03-Architect challenger invocation       |
 | `sku_manifest_status`     | `draft` \| `reviewed` \| `locked` \| `deploying` \| `deployed` \| `drift` | n/a                                | various         | 05/06/07 agents                          |
 | `sku_manifest_revision`   | integer ≥ 1                                                               | `1`                                | various         | sku-manifest validators                  |
-| `sku_preferences_captured`| `true` \| `false`                                                         | `false` (Phase 3j elicitation skipped) | 02-Requirements | 03-Architect, sku-manifest validators    |
+| `sku_preferences_captured`| `true` \| `false`                                                         | `false` (elicitation skipped; not required for Assessment) | 02-Requirements | 03-Architect, sku-manifest validators    |
 
 ### Step 3 (Design) keys — new in this plan
 
@@ -96,17 +108,21 @@ The `<step>` suffix is the integer step number (`1`, `2`, `3_5`, `4`).
 | `public_edge_auth`     | `entra-only` \| `app-gateway-waf` \| `front-door` \| `apim` \| `none`        | n/a                         | 05-IaC Planner                 | 06b/06t CodeGen                        |
 | `script_runtime_image` | container image ref (e.g. `mcr.microsoft.com/azure-cli:2.x`)                 | n/a                         | 05-IaC Planner                 | 06b/06t CodeGen (deployment scripts)   |
 | `az_posture`           | `private-only` \| `hybrid` \| `public-restricted`                            | n/a                         | 05-IaC Planner                 | 06b/06t CodeGen, 04g-Governance review |
+| `plan_status`          | `APPROVED` \| `EXCEPTION_AUTHORIZED` \| `SUPERSEDED`                           | n/a (plan not approved)     | 05-IaC Planner, apex-recall    | 06b/06t CodeGen                        |
 
 ### Step 6 (Deploy) keys
 
 | Key                       | Valid values                                                          | Default behaviour if absent | Set by         | Read by         |
 | ------------------------- | --------------------------------------------------------------------- | --------------------------- | -------------- | --------------- |
-| `deployment_strategy`     | `azd_provision` \| `az_deployment` \| `terraform_apply`               | n/a                         | 07b/07t Deploy | Step 7 As-Built |
+| `deployment_strategy`     | `single` \| `phased` \| `azd_provision` \| `az_deployment` \| `terraform_apply` | `single`                    | 01-Orchestrator, 07b/07t Deploy | 07b/07t Deploy, Step 7 As-Built |
 | `sku_conflict_resolution` | `revert_to_plan` \| `accept_substitute` \| `change_region` \| `abort` | n/a (per-conflict)          | Orchestrator   | 07b/07t Deploy  |
+| `sku_overrides`           | list of `{service_id, original_sku, substitute_sku, reason, recorded}` | n/a (no overrides)         | 07b/07t Deploy | 08-As-Built, sku-manifest validators |
+| `governance_trace`        | `PASSED` or `FAILED: <reason>` (L0 to L3 attestation result)          | n/a                         | 07b/07t Deploy | validate-governance-trace |
+| `governance_override`     | free-form reason recorded by a human                                  | n/a (no override)           | Human via agent | validate-governance-trace |
 
 ### Cost monitoring baseline keys
 
-Owned by `.github/skills/azure-defaults/references/cost-alerts-baseline.md`.
+Owned by `.github/skills/apex-azure-defaults/references/cost-alerts-baseline.md`.
 All keys are emitted by Planner Phase 4 (or 02-Requirements for the
 two user-facing keys) and consumed by 06b/06t CodeGen Wave 4.
 
@@ -122,7 +138,7 @@ two user-facing keys) and consumed by 06b/06t CodeGen Wave 4.
 
 ### VNet planning keys (Architect Phase 6b)
 
-Owned by [`.github/skills/azure-defaults/references/vnet-planning.md`](../../../.github/skills/azure-defaults/references/vnet-planning.md).
+Owned by [`.github/skills/apex-azure-defaults/references/vnet-planning.md`](../../../.github/skills/apex-azure-defaults/references/vnet-planning.md).
 Emitted by 03-Architect Phase 6b when the trigger contract holds
 (any `services[].requires[] ∈ {vnet-integration, private-endpoints}`
 OR any `services[].service_name` in the vnet-attached whitelist).

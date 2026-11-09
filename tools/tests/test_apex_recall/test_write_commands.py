@@ -13,16 +13,17 @@ from apex_recall.state_writer import VALID_STEP_KEYS
 
 
 @pytest.fixture
-def workspace(tmp_path: Path) -> Path:
+def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Create a minimal workspace for write command tests."""
+    monkeypatch.delenv("APEX_ROOT", raising=False)
     ao = tmp_path / "agent-output"
     ao.mkdir()
     (tmp_path / "tmp").mkdir()
     return tmp_path
 
 
-def _run(workspace: Path, argv: list[str]) -> tuple[int, str]:
-    """Run CLI in workspace, capture stdout."""
+def _run(workspace: Path, argv: list[str], *, legacy: bool = True) -> tuple[int, str]:
+    """Exercise legacy command compatibility unless testing the new-project default."""
     import io
     import sys
 
@@ -32,7 +33,14 @@ def _run(workspace: Path, argv: list[str]) -> tuple[int, str]:
     old_stdout = sys.stdout
     sys.stdout = captured
     try:
-        rc = main(argv)
+        effective_argv = [*argv, "--layout", "1"] if legacy and argv and argv[0] == "init" and "--layout" not in argv else argv
+        rc = main(effective_argv)
+        if legacy and argv[0] == "init" and rc == 0:
+            from apex_recall.state_writer import read_state, session_state_path, write_state
+
+            state = read_state(session_state_path(argv[1]))
+            state["decisions"].pop("workflow_contract")
+            write_state(argv[1], state)
     except SystemExit as e:
         rc = e.code or 0
     finally:
@@ -46,17 +54,23 @@ def _run(workspace: Path, argv: list[str]) -> tuple[int, str]:
 
 class TestInit:
     def test_creates_session_state(self, workspace: Path):
-        rc, out = _run(workspace, ["init", "my-proj", "--json"])
+        rc, out = _run(workspace, ["init", "my-proj", "--json"], legacy=False)
         assert rc == 0
         data = json.loads(out)
         assert data["created"] is True
         assert data["project"] == "my-proj"
 
-        state_path = workspace / "agent-output" / "my-proj" / "00-session-state.json"
+        state_path = workspace / "agent-output" / "my-proj" / "_meta" / "00-session-state.json"
         assert state_path.exists()
+        for sub in ("assets", "contracts", "reviews", "_meta"):
+            assert (workspace / "agent-output" / "my-proj" / sub).is_dir()
         state = json.loads(state_path.read_text())
         assert state["schema_version"] == "3.0"
+        assert state["layout_version"] == 2
+        assert state["decisions"]["workflow_contract"] == "practical-v1"
         assert set(state["steps"].keys()) == {"1", "2", "3", "3_5", "4", "5", "6", "7"}
+        rc, _ = _run(workspace, ["complete-step", "my-proj", "1", "--json"])
+        assert rc == 2
 
     def test_fails_if_exists(self, workspace: Path):
         _run(workspace, ["init", "my-proj", "--json"])
@@ -85,7 +99,9 @@ class TestStartStep:
 
     def test_governance_step_3_5(self, workspace: Path):
         _run(workspace, ["init", "sp", "--json"])
-        rc, out = _run(workspace, ["start-step", "sp", "3_5", "--json"])
+        rc, _ = _run(workspace, ["start-step", "sp", "3_5", "--json"])
+        assert rc == 2
+        rc, out = _run(workspace, ["start-step", "sp", "3_5", "--allow-out-of-order", "test setup", "--json"])
         assert rc == 0
         assert json.loads(out)["step"] == "3_5"
 
@@ -158,7 +174,10 @@ class TestDecide:
 
     def test_mode_b_decision_log(self, workspace: Path):
         _run(workspace, ["init", "dc", "--json"])
-        rc, out = _run(workspace, ["decide", "dc", "--decision", "Use hub-spoke", "--rationale", "Isolation", "--step", "2", "--json"])
+        rc, out = _run(
+            workspace,
+            ["decide", "dc", "--decision", "Use hub-spoke", "--rationale", "Isolation", "--step", "2", "--json"],
+        )
         assert rc == 0
         data = json.loads(out)
         assert data["decision"] == "Use hub-spoke"
@@ -321,14 +340,23 @@ class TestFindingAddMany:
 class TestReviewAudit:
     def test_creates_audit_entry(self, workspace: Path):
         _run(workspace, ["init", "ra", "--json"])
-        rc, out = _run(workspace, [
-            "review-audit", "ra", "2",
-            "--complexity", "standard",
-            "--passes-planned", "1",
-            "--passes-executed", "1",
-            "--model", "03-Architect",
-            "--json",
-        ])
+        rc, out = _run(
+            workspace,
+            [
+                "review-audit",
+                "ra",
+                "2",
+                "--complexity",
+                "standard",
+                "--passes-planned",
+                "1",
+                "--passes-executed",
+                "1",
+                "--model",
+                "03-Architect",
+                "--json",
+            ],
+        )
         assert rc == 0
         data = json.loads(out)
         assert data["audit_key"] == "step_2"
@@ -372,7 +400,12 @@ class TestAtomicWrite:
         # Corrupt the primary file
         primary = workspace / "agent-output" / "bak" / "00-session-state.json"
         primary.write_text("{bad json///")
-        # Next command should recover from .bak
+        rc, out = _run(workspace, ["complete-step", "bak", "1", "--json"])
+        assert rc == 1
+        assert primary.read_text() == "{bad json///"
+        rc, out = _run(workspace, ["recover-state", "bak", "--reason", "Explicit fixture recovery", "--json"])
+        assert rc == 0
+        assert json.loads(out)["outcome"] == "recovered"
         rc, out = _run(workspace, ["complete-step", "bak", "1", "--json"])
         assert rc == 0
         assert json.loads(out)["status"] == "complete"

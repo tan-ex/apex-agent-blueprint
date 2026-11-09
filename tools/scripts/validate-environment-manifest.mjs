@@ -62,7 +62,7 @@ function redactManifest(data) {
 }
 
 function defaultGlobs() {
-  return ["agent-output/*/04-environment-manifest.json"];
+  return ["agent-output/*/04-environment-manifest.json", "agent-output/*/contracts/04-environment-manifest.json"];
 }
 
 function main() {
@@ -70,6 +70,12 @@ function main() {
   r.header();
   const validate = loadValidator(SCHEMA_PATH);
   const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes("--help")) {
+    console.log(
+      "Usage: validate-environment-manifest.mjs [artifact-path-or-glob ...] [--redact]\nNo paths: scan project manifests.",
+    );
+    return;
+  }
   const redact = rawArgs.includes("--redact");
   const args = rawArgs.filter((a) => a !== "--redact");
   const patterns = args.length > 0 ? args : defaultGlobs();
@@ -77,6 +83,7 @@ function main() {
   let files = [];
   for (const pat of patterns) {
     const matched = globSync(pat, { cwd: ROOT, absolute: true });
+    if (args.length > 0 && matched.length === 0) r.error(pat, "Explicit target matched no files; use an artifact path");
     files = files.concat(matched);
   }
   files = [...new Set(files)];
@@ -84,7 +91,8 @@ function main() {
   if (files.length === 0) {
     r.info("(no 04-environment-manifest.json files found)");
     r.summary();
-    process.exit(0);
+    r.exitOnError("No environment manifests selected");
+    return;
   }
 
   for (const filePath of files) {
@@ -104,6 +112,20 @@ function main() {
       continue;
     }
     const envs = Object.keys(data.environments ?? {});
+    if (envs.length === 0) {
+      r.error(fileRel, "environments must contain at least one environment entry");
+      continue;
+    }
+    let envErrors = 0;
+    for (const [envName, env] of Object.entries(data.environments ?? {})) {
+      for (const reqField of ["subscription_id", "tenant_id", "primary_region"]) {
+        if (typeof env?.[reqField] !== "string" || !env[reqField].trim()) {
+          r.error(fileRel, `environments.${envName}.${reqField} must be a non-empty string`);
+          envErrors++;
+        }
+      }
+    }
+    if (envErrors > 0) continue;
     r.ok(fileRel, `environment-manifest (${envs.length} envs: ${envs.join(", ")})`);
     if (redact) {
       console.log(JSON.stringify(redactManifest(data), null, 2));

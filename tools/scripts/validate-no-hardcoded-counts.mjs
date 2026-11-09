@@ -111,15 +111,15 @@ function validateManifest(manifest) {
 
 // Patterns that look like hard-coded entity counts in prose
 const COUNT_PATTERNS = [
-  /(?<![\d.])(\d{1,3})\s+(primary\s+)?agents?\b/i,
-  /(?<![\d.])(\d{1,3})\s+subagents?\b/i,
-  /(?<![\d.])(\d{1,3})\s+(GA\s+)?skills?\b/i,
-  /(?<![\d.])(\d{1,3})\s+instructions?\s*(files?)?\b/i,
-  /(?<![\d.])(\d{1,3})\s+validators?\b/i,
-  /(?<![\d.])(\d{1,3})\s+top-level\b/i,
-  /(?<![\d.])(\d{1,3})\s+pre-installed\b/i,
-  /(?<![\d.])(\d{1,2})-step\s+workflow\b/i,
-  /(?<![\d.])(\d{1,2})\s+steps?\b/i,
+  /(?<![\d.-])(\d{1,3})\s+(primary\s+)?agents?\b/i,
+  /(?<![\d.-])(\d{1,3})\s+subagents?\b/i,
+  /(?<![\d.-])(\d{1,3})\s+(GA\s+)?skills?\b/i,
+  /(?<![\d.-])(\d{1,3})\s+instructions?\s*(files?)?\b/i,
+  /(?<![\d.-])(\d{1,3})\s+validators?\b/i,
+  /(?<![\d.-])(\d{1,3})\s+top-level\b/i,
+  /(?<![\d.-])(\d{1,3})\s+pre-installed\b/i,
+  /(?<![\d.-])(\d{1,2})-step\s+workflow\b/i,
+  /(?<![\d.-])(\d{1,2})\s+steps?\b/i,
 ];
 
 // These numbers are too common in other contexts — only flag if entity keyword follows
@@ -134,6 +134,7 @@ const ALLOWLIST_PATHS = [
   /no-hardcoded-counts\.instructions\.md$/,
   /node_modules\//,
   /\.git\//,
+  /\.archive\//,
   /site\//,
   /\.venv/,
   /backup\//,
@@ -142,7 +143,6 @@ const ALLOWLIST_PATHS = [
   /\.diff$/,
   /\.prompt\.md$/, // Prompt files contain historical execution plans with point-in-time counts
   /e2e-test-plan/, // E2E test plans contain point-in-time counts
-  /archived_skills\//, // Archived skill content is frozen
 ];
 
 // Lines containing these phrases are exempt (historical context, version refs)
