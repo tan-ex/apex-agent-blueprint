@@ -7,6 +7,27 @@
  */
 
 export const ARTIFACT_HEADINGS = {
+  "01-assessment-brief.md": [
+    "## Scope and Authorization",
+    "## Business Context",
+    "## Evidence and Reporting Settings",
+    "## Deliverables and Acceptance",
+  ],
+  "03-cost-management-report.md": [
+    "## Scope and Evidence",
+    "## Cost Summary",
+    "## Trends and Forecast",
+    "## Cost Drivers and Allocation",
+    "## Optimization Opportunities",
+    "## Coverage and Limitations",
+  ],
+  "04-assessment-action-register.md": [
+    "## Executive Summary",
+    "## Action Register",
+    "## Financial Summary",
+    "## Basis of Estimate",
+    "## Coverage and Limitations",
+  ],
   // Core artifacts (standard strictness)
   "01-requirements.md": [
     "## 🎯 Project Overview",
@@ -171,7 +192,7 @@ export const ARTIFACT_HEADINGS = {
   ],
   // Workflow gate companion file (relaxed strictness; overwritten at every gate).
   // Required H2s sourced from
-  // .github/skills/workflow-engine/references/orchestrator-handoff-guide.md
+  // .github/skills/apex-workflow-engine/references/orchestrator-handoff-guide.md
   // (see "Phase Handoff Document" section). Headings are plain (no emoji)
   // because the guide uses plain headings.
   "00-handoff.md": [

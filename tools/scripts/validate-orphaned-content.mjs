@@ -20,18 +20,22 @@ import { findSkillReferences } from "./_lib/skill-references.mjs";
 // These are invoked dynamically by VS Code Copilot via skill descriptions
 // or used as general-purpose skills available to any conversation.
 const KNOWN_UNLINKED_SKILLS = new Set([
-  "azure-cloud-migrate",
-  "azure-compliance",
-  "azure-compute",
-  "azure-cost-optimization",
-  "azure-kusto",
-  "azure-quotas",
-  "azure-rbac",
-  "azure-resources",
-  "azure-storage",
-  "entra-app-registration",
-  "mermaid",
-  "python-diagrams",
+  "apex-azure-cloud-migrate",
+  "apex-azure-compliance",
+  "apex-azure-compute",
+  "apex-azure-cost-optimization",
+  "apex-azure-kusto",
+  "apex-azure-quotas",
+  "apex-azure-rbac",
+  "apex-azure-resources",
+  "apex-azure-storage",
+  "apex-debug-log-export",
+  "apex-entra-app-registration",
+  "apex-mermaid",
+  "apex-microsoft-docs",
+  "apex-python-diagrams",
+  "apex-terraform-test",
+  "apex-workflow-start",
 ]);
 
 const r = new Reporter("Orphaned Content Validator");
@@ -50,7 +54,7 @@ function gatherReferenceContent() {
   }
 
   // Top-level config files
-  for (const f of [COPILOT_INSTRUCTIONS, "AGENTS.md", "tools/apex-prompts/plan-agenticWorkflowOverhaul.prompt.md"]) {
+  for (const f of [COPILOT_INSTRUCTIONS, "AGENTS.md"]) {
     if (fs.existsSync(f)) corpus.push(fs.readFileSync(f, "utf-8"));
   }
 

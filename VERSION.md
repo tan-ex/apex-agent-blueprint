@@ -16,7 +16,7 @@
 
 ## Version History
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+See the [published changelog](https://apexops.pro/project/changelog/) for detailed release notes.
 
 <div align="right"><a href="#top"><b>⬆️ Back to Top</b></a></div>
 
@@ -30,9 +30,10 @@ This project follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 <div align="right"><a href="#top"><b>⬆️ Back to Top</b></a></div>
 
-## Automated Versioning
+## Version Bump Policy
 
-Version bumps are automated via GitHub Actions based on [Conventional Commits](https://www.conventionalcommits.org/):
+The table describes intended version bumps based on [Conventional Commits](https://www.conventionalcommits.org/).
+Commit-message validation does not itself update release versions.
 
 | Commit Type                    | Version Bump | Example                    |
 | ------------------------------ | ------------ | -------------------------- |

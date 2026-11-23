@@ -1,0 +1,5 @@
+{
+  "$schema": "../schemas/npm-audit-exceptions.schema.json",
+  "schema_version": 1,
+  "exceptions": []
+}

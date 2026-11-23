@@ -5,13 +5,11 @@ applyTo: "**/*.instructions.md"
 
 # Custom Instructions File Guidelines
 
-For the complete official reference, see
-[VS Code Custom Instructions docs](https://code.visualstudio.com/docs/copilot/customization/custom-instructions).
-
 ## Frontmatter
 
-All frontmatter fields are optional. Without `applyTo`, the instructions file
-is not auto-applied but can still be manually attached to a chat request.
+Without `applyTo`, an instructions file is not auto-applied but can still be attached
+manually. APEX validators (`validate-instruction-checks.mjs`) require both `description`
+and `applyTo` on every file in this folder.
 
 ```yaml
 ---
@@ -32,63 +30,45 @@ applyTo: "**/*.py"
 | Scope                     | Path                                                       |
 | ------------------------- | ---------------------------------------------------------- |
 | Workspace                 | `.github/instructions/` (searched recursively)             |
-| Workspace (Claude format) | `.claude/rules/` (uses `paths` array instead of `applyTo`) |
-| User profile              | `~/.copilot/instructions/`, `~/.claude/rules/`             |
-| Custom                    | Configured via `chat.instructionsFilesLocations` setting   |
+| User profile              | Copilot-supported personal instruction locations          |
+| Custom repository roots   | `instructionDirectories` in `.github/copilot/settings.json` |
 
-## Priority Order
+APEX authors repository instructions only in `.github/instructions/`.
+The Local-harness `chat.instructionsFilesLocations` setting is not a Copilot SDK
+configuration contract. See the official
+[SDK discovery contract](https://github.com/github/copilot-sdk/blob/main/docs/features/customization-locations.md).
+Discovery configuration is not a filesystem grant or proof of runtime attachment.
 
-When multiple instruction sources exist, higher priority wins on conflict:
+## Ownership and Conflict Resolution
 
-1. Personal instructions (user-level, highest)
-2. Repository instructions (`.github/copilot-instructions.md` or `AGENTS.md`)
-3. Organization instructions (lowest)
+The harness owns instruction-source precedence; repository prose cannot override it.
+Within APEX, `AGENTS.md` owns build/contribution conventions and the workflow table;
+`.github/copilot-instructions.md` owns Azure defaults, session-state usage and runtime
+boundaries. Nested IaC `AGENTS.md` files own track-specific commands.
+Domain instructions own file-specific contracts; references own extended rationale.
+Preserve essential safeguards in agent bodies even when a canonical reference exists.
 
 ## File Structure
 
-1. **Title** (`#`) with brief introduction
-2. **Core sections** organized by domain — prefer tables and bullet lists over prose
-3. **Examples** with `### Good Example` / `### Bad Example` labels and fenced code blocks
-4. **Validation** (optional) — build/lint/test commands
-
-Use `#tool:<tool-name>` to reference agent tools in body text.
-
-## Writing Rules
-
-| Rule                    | Details                                                |
-| ----------------------- | ------------------------------------------------------ |
-| Imperative mood         | "Use", "Implement", "Avoid" — not "You should"         |
-| Specific and actionable | Concrete examples > abstract concepts                  |
-| Concise and scannable   | Bullet points, tables; avoid verbose paragraphs        |
-| No ambiguity            | Avoid "should", "might", "possibly"                    |
-| Show why                | Explain reasoning only when it adds value              |
-| Stay current            | Reference current versions; remove deprecated patterns |
-
-## Patterns to Follow
-
-- **Tables** for structured rules, comparisons, parameter lists
-- **Code comparisons** with Good/Bad examples in fenced blocks
-- **Conditional guidance** for context-dependent rules (e.g., project size)
-- **Bullet lists** for sequential rules or checklists
-
-## Patterns to Avoid
-
-- Overly verbose explanations — keep it scannable
-- Outdated information or deprecated features
-- Missing examples — abstract rules without code
-- Contradictory advice within the same file
-- Copy-paste from documentation — distill and contextualize
+Start with a `#` title and a one-line purpose, then domain sections that prefer tables and
+bullets over prose. Use imperative mood, add Good/Bad examples only where a rule is ambiguous,
+and use `#tool:<tool-name>` to reference agent tools. Keep only repository-specific rules —
+do not restate general language or platform knowledge; link to the owning skill or reference.
 
 ## Maintenance
 
-When multiple instructions apply to the same file via overlapping `applyTo` globs,
-see `.github/instructions/references/precedence-matrix.md` for resolution rules.
+For overlapping authoring rules, see
+[the precedence matrix](references/precedence-matrix.md).
+These are repository topic-ownership rules, not a replacement for runtime precedence.
 
 - Review when dependencies or frameworks are updated
 - Keep glob patterns accurate as project structure evolves
-- Target under 150 lines; split large content into a companion skill's `references/` folder
+- Follow the advisory size targets in
+  [context optimization](context-optimization.instructions.md#instruction-file-rules);
+  split optional detail, not essential constraints, into references
+- Adding, renaming or removing an instruction file requires updating callers, tests and the
+  Explorer registry (`docs-trigger.instructions.md`)
 
 ## Resources
 
 - [Custom Instructions docs](https://code.visualstudio.com/docs/copilot/customization/custom-instructions)
-- [Community examples](https://github.com/github/awesome-copilot)

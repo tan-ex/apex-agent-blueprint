@@ -7,6 +7,12 @@
     "## Skill Context",
     "## Artifacts"
   ],
+  "01-assessment-brief.md": [
+    "## Scope and Authorization",
+    "## Business Context",
+    "## Evidence and Reporting Settings",
+    "## Deliverables and Acceptance"
+  ],
   "01-requirements.md": [
     "## 🎯 Project Overview",
     "## 🚀 Functional Requirements",
@@ -27,6 +33,14 @@
     "## 🚀 Implementation Handoff",
     "## 🔒 Approval Gate"
   ],
+  "03-cost-management-report.md": [
+    "## Scope and Evidence",
+    "## Cost Summary",
+    "## Trends and Forecast",
+    "## Cost Drivers and Allocation",
+    "## Optimization Opportunities",
+    "## Coverage and Limitations"
+  ],
   "03-des-cost-estimate.md": [
     "## 💵 Cost At-a-Glance",
     "## ✅ Decision Summary",
@@ -38,6 +52,13 @@
     "## 🎯 Quick Decision Matrix",
     "## 💰 Savings Opportunities",
     "## 🧾 Detailed Cost Breakdown"
+  ],
+  "04-assessment-action-register.md": [
+    "## Executive Summary",
+    "## Action Register",
+    "## Financial Summary",
+    "## Basis of Estimate",
+    "## Coverage and Limitations"
   ],
   "04-governance-constraints.md": [
     "## 🔍 Discovery Source",

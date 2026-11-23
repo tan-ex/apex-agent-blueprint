@@ -60,8 +60,7 @@ export function getSkills() {
     if (!entry.isDirectory()) continue;
     const skillDir = path.join(SKILLS_DIR, entry.name);
     const skillFile = path.join(skillDir, "SKILL.md");
-    // Skip container directories like `archived_skills/` that have no SKILL.md
-    // at the top level — those are inactive skill stores, not active skills.
+    // Only directories with their own top-level SKILL.md are active skills.
     if (!fs.existsSync(skillFile)) continue;
     const refsDir = path.join(skillDir, "references");
     const hasRefs = fs.existsSync(refsDir);
@@ -119,8 +118,7 @@ export function resetIndex() {
  * Prompt frontmatter uses string `model:` (not array, per agent-authoring convention).
  * `body` is the markdown after the closing `---`.
  *
- * Scans every directory listed in `PROMPT_SOURCE_DIRS` (production prompts in
- * `tools/apex-prompts/` plus E2E test prompts in `tools/tests/prompts/`).
+ * Scans every directory listed in `PROMPT_SOURCE_DIRS`.
  */
 export function getPromptFiles() {
   if (_prompts) return _prompts;
@@ -134,7 +132,7 @@ export function getPromptFiles() {
       const frontmatter = parseFrontmatter(content);
       const fmEnd = content.indexOf("\n---", content.indexOf("---") + 3);
       const body = fmEnd !== -1 ? content.substring(fmEnd + 4) : content;
-      _prompts.set(file, { path: filePath, content, frontmatter, body });
+      _prompts.set(filePath, { path: filePath, content, frontmatter, body });
     }
   }
   return _prompts;

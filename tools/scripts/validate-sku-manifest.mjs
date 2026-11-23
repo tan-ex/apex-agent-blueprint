@@ -19,6 +19,8 @@
  *   7. source ↔ source_step coherence (user-pin → 1; deploy-substitute → 6).
  *   8. stamps[].id unique; stamps[].service_overrides refer to real services[].id.
  *   9. stamps[].environments subset of top-level environments[].
+ *      Subscription logical IDs and Azure GUIDs are unique; service/stamp
+ *      references must resolve and cannot disagree for the same deployment.
  *  10. Governance allowlist cross-check (when sku_allowlist_snapshot present):
  *      services[].size must match an allowed pattern OR fail.
  *  11. Pricing freshness — WARN when cost_estimated_at > PRICING_TTL_DAYS old.
@@ -48,10 +50,11 @@ import { loadValidator } from "./_lib/ajv-validator.mjs";
 import { findArtifactFiles } from "./_lib/artifact-index.mjs";
 import { Reporter } from "./_lib/reporter.mjs";
 import { readJson } from "./_lib/json.mjs";
+import { projectDirFromPath, resolveContractPath, resolveSessionStatePath } from "./_lib/project-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SCHEMA_PATH = path.join(ROOT, "tools/schemas/sku-manifest.schema.json");
-const VNET_PLANNING_REF = path.join(ROOT, ".github/skills/azure-defaults/references/vnet-planning.md");
+const VNET_PLANNING_REF = path.join(ROOT, ".github/skills/apex-azure-defaults/references/vnet-planning.md");
 
 const PRICING_TTL_DAYS = Number(process.env.APEX_SKU_PRICING_TTL_DAYS ?? 30);
 const MANIFEST_TTL_DAYS = Number(process.env.APEX_SKU_MANIFEST_TTL_DAYS ?? 90);
@@ -60,6 +63,7 @@ const VNET_REQUIRES_TOKENS = new Set(["vnet-integration", "private-endpoints"]);
 
 const SOURCE_TO_STEP = {
   "user-pin": "1",
+  "observed-current": "1",
   "architect-derived": "2",
   "deploy-substitute": "6",
 };
@@ -144,8 +148,8 @@ function checkSourceStepCoherence(data, fileRel, r) {
     const expected = SOURCE_TO_STEP[svc.source];
     if (!expected) continue;
     // architect-derived entries may legitimately be revised at later steps
-    // (Planner reconciliation keeps source unchanged); only user-pin and
-    // deploy-substitute must match source_step strictly.
+    // (Planner reconciliation keeps source unchanged); intake observations,
+    // user pins and deploy substitutions must match their creation step.
     if (svc.source === "architect-derived") continue;
     if (svc.source_step !== expected) {
       r.error(
@@ -173,6 +177,46 @@ function checkStamps(data, fileRel, r) {
     for (const overrideId of Object.keys(stamp.service_overrides ?? {})) {
       if (!serviceIds.has(overrideId)) {
         r.error(fileRel, `stamps[${stamp.id}].service_overrides references unknown services[].id "${overrideId}"`);
+      }
+    }
+  }
+}
+
+function checkSubscriptions(data, fileRel, r) {
+  const ids = new Set();
+  const azureIds = new Set();
+  for (const subscription of data.subscriptions ?? []) {
+    if (ids.has(subscription.id)) r.error(fileRel, `Duplicate subscriptions[].id: "${subscription.id}"`);
+    ids.add(subscription.id);
+    if (subscription.subscription_id) {
+      const azureId = subscription.subscription_id.toLowerCase();
+      if (azureIds.has(azureId)) {
+        r.error(fileRel, `Duplicate subscriptions[].subscription_id: "${subscription.subscription_id}"`);
+      }
+      azureIds.add(azureId);
+    }
+  }
+  for (const [collection, entries] of [
+    ["services", data.services ?? []],
+    ["stamps", data.stamps ?? []],
+  ]) {
+    for (const entry of entries) {
+      if (entry.subscription && !ids.has(entry.subscription)) {
+        r.error(
+          fileRel,
+          `${collection}[${entry.id}].subscription references unknown subscriptions[].id "${entry.subscription}"`,
+        );
+      }
+    }
+  }
+  // Every stamp expands every service; a service attribution is not a filter.
+  for (const stamp of data.stamps ?? []) {
+    for (const service of data.services ?? []) {
+      if (stamp.subscription && service.subscription && stamp.subscription !== service.subscription) {
+        r.error(
+          fileRel,
+          `stamps[${stamp.id}].subscription "${stamp.subscription}" conflicts with services[${service.id}].subscription "${service.subscription}"; omit the service subscription for cross-subscription stamps`,
+        );
       }
     }
   }
@@ -234,11 +278,15 @@ function checkFreshness(data, fileRel, r, now = new Date()) {
 }
 
 function checkMdSync(filePath, data, fileRel, r) {
-  // Sibling .md companion. Required to exist and to declare a Current
+  // Sibling or project-root .md companion. Required to exist and to declare a Current
   // revision cell matching JSON `current_revision`. The MD is the
   // deterministic output of tools/scripts/render-sku-manifest-md.mjs;
   // any mismatch indicates a stale rendering or hand-edit.
-  const mdPath = filePath.replace(/\.json$/, ".md");
+  let mdPath = filePath.replace(/\.json$/, ".md");
+  if (!fs.existsSync(mdPath)) {
+    const rootMd = path.join(projectDirFromPath(filePath), "sku-manifest.md");
+    if (fs.existsSync(rootMd)) mdPath = rootMd;
+  }
   const mdRel = path.relative(ROOT, mdPath);
   if (!fs.existsSync(mdPath)) {
     r.error(fileRel, `Companion MD missing: ${mdRel} — run 'node tools/scripts/render-sku-manifest-md.mjs <project>'`);
@@ -304,7 +352,7 @@ function loadVnetAttachedWhitelist() {
  * (sibling of the sku-manifest). Returns the value or undefined.
  */
 function readVnetMode(manifestPath) {
-  const statePath = path.join(path.dirname(manifestPath), "00-session-state.json");
+  const statePath = resolveSessionStatePath(manifestPath);
   if (!fs.existsSync(statePath)) return undefined;
   try {
     const state = JSON.parse(fs.readFileSync(statePath, "utf-8"));
@@ -368,6 +416,7 @@ function validateFile(filePath, validate, r, vnetWhitelist) {
   checkRegionInfo(data, rel, r);
   checkSourceStepCoherence(data, rel, r);
   checkStamps(data, rel, r);
+  checkSubscriptions(data, rel, r);
   checkAllowlist(data, rel, r);
   if (!isTemplateOrFixture) checkFreshness(data, rel, r);
   if (!isTemplateOrFixture) checkMdSync(filePath, data, rel, r);
@@ -377,28 +426,28 @@ function validateFile(filePath, validate, r, vnetWhitelist) {
 }
 
 function findManifests() {
-  return findArtifactFiles((file) => /^agent-output\/[^/]+\/sku-manifest\.json$/.test(file)).map((file) =>
-    path.join(ROOT, file),
+  return findArtifactFiles((file) => /^agent-output\/[^/]+\/(?:contracts\/)?sku-manifest\.json$/.test(file)).map(
+    (file) => path.join(ROOT, file),
   );
 }
 
 /**
  * Resolve a CLI arg into a manifest file path. Accepts:
  *   - a direct file path (absolute or relative to repo root)
- *   - a directory containing sku-manifest.json
- *   - a bare project name → agent-output/<project>/sku-manifest.json
+ *   - a directory containing sku-manifest.json (or contracts/sku-manifest.json)
+ *   - a bare project name → agent-output/<project>/(contracts/)?sku-manifest.json
  * Falls back to path.resolve so non-existent inputs surface as "File not found".
  */
 function resolveTarget(arg) {
   const abs = path.resolve(ROOT, arg);
   if (fs.existsSync(abs)) {
     const stat = fs.statSync(abs);
-    if (stat.isDirectory()) return path.join(abs, "sku-manifest.json");
+    if (stat.isDirectory()) return resolveContractPath(abs, "sku-manifest.json");
     return abs;
   }
   // Bare project name (no path separator, no .json extension) → agent-output/<arg>/sku-manifest.json
   if (!arg.includes(path.sep) && !arg.includes("/") && !arg.endsWith(".json")) {
-    const projectGuess = path.join(ROOT, "agent-output", arg, "sku-manifest.json");
+    const projectGuess = resolveContractPath(path.join(ROOT, "agent-output", arg), "sku-manifest.json");
     if (fs.existsSync(projectGuess)) return projectGuess;
   }
   return abs;

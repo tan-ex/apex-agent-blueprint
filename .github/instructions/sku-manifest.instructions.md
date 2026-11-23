@@ -11,7 +11,10 @@ JSON is canonical; the markdown is a rendering for human review.
 
 Schema: `tools/schemas/sku-manifest.schema.json`
 Validators: `npm run validate:sku-manifest` + `npm run validate:sku-iac-coverage`
-Templates: `.github/skills/azure-artifacts/templates/sku-manifest.template.{md,json}`
+Templates: `.github/skills/apex-azure-artifacts/templates/sku-manifest.template.{md,json}`
+Tooling details (coverage rules, legacy opt-out, governance allowlist projection, pricing TTLs,
+multi-stamp manifests, MD/JSON sync enforcement):
+[`sku-manifest-details.md`](../skills/apex-azure-artifacts/references/sku-manifest-details.md)
 
 ## Scope — what belongs in `services[]`
 
@@ -64,12 +67,28 @@ checkpoints — **not** a free-form changelog.
 - `user-pin` — Step 1 (Requirements). Captured via the mandatory Phase 3j
   SKU/sizing preference elicitation (see
   [Mandatory Elicitation at Step 1](#mandatory-elicitation-at-step-1)).
-  Never auto-changed by downstream agents. If a planner/deploy step
+  At rev 1, with only Step 1 revision metadata, record only the explicit lock
+  (for example `size: "LRS"` for a replication-only pin) and known constraints.
+  Omit unknown IaC logical names, capacity, zoning, regions, SLA and commitment;
+  never invent them to pass validation. Supplied fields must still be valid.
+  Later revisions and non-Step-1 manifests require complete configuration.
+  Architecture fills the missing configuration while preserving the original lock
+  and `source_step: "1"`; unknown capacity/commitment cannot become pricing defaults.
+  Never auto-change the lock. If a planner/deploy step
   needs to alter a user-pin SKU, escalate to Architect via the
   `step-N → step-2` return edge.
 - `architect-derived` — Step 2 (Architecture). Chosen by `03-Architect`
   from priced `candidate_sets[]`. May be revised at Step 4 (Planner)
   for governance reconciliation; revision keeps `source: architect-derived`.
+- `observed-current` — Step 1 existing-workload intake, with `source_step: "1"`
+  and required `observed_sku`. Set `size` to the observed SKU initially.
+  Omit unobserved capacity, zoning, commitment, regions, SLA target and IaC logical names;
+  omission means unknown, not one instance, no zones or on-demand. Pricing requires explicit
+  quantity/commitment evidence. Architect-derived and deploy-substitute entries retain
+  complete configuration requirements.
+  This is evidence, **not a lock**: Architect may recommend a new `size` and
+  change `source` to `architect-derived`, preserving `observed_sku` and the
+  original `source_step`. Explicit `user-pin` choices remain locks.
 - `deploy-substitute` — Step 6 (Deploy). Substituted by `07b`/`07t`
   during the block-with-escalation pre-flight when quota/region capacity
   forces a change. Always paired with an entry in
@@ -77,12 +96,31 @@ checkpoints — **not** a free-form changelog.
 
 `source_step` records when the entry was first created.
 
+## Subscription and Stamp Attribution
+
+Optional `subscriptions[]` entries require unique logical `id` and a `display_name`,
+with optional Azure GUID `subscription_id` (unique ignoring case) and `role`
+(`hub`, `spoke`, `shared`, `data`, `management`, `workload`). Display names need not be unique.
+These are topology metadata, not subscription resources in `services[]`.
+
+Set `services[].subscription` for a service deployed in one subscription.
+For cross-subscription deployments, omit that field and set `stamps[].subscription`.
+Every reference must resolve to `subscriptions[].id`; GUIDs are not references.
+Every stamp expands every service, so simultaneous service/stamp attribution must agree;
+service attribution does not filter stamps. Environment/service overrides cannot change subscription.
+Cost lines use `stamp?.subscription ?? service.subscription ?? null`.
+Manifests without subscriptions remain valid; unknown attribution stays unknown.
+
+Re-render markdown after changing JSON. Optional `## Subscriptions` and `## Stamps`
+show deployment context; `Observed SKU` compares intake evidence against recommended `size`,
+distinct from Step 7 `actual_sku`.
+
 ## Lifecycle (per `00-session-state.json` `decisions.sku_manifest_status`)
 
 | Status      | Set by            | Meaning                                                                                                |
 | ----------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
 | (empty)     | —                 | Manifest not yet created                                                                               |
-| `draft`     | `02-Requirements` | Rev 1 written. Phase 3j SKU/sizing elicitation complete; `decisions.sku_preferences_captured = true`. |
+| `draft`     | `02-Requirements` | Rev 1 records user pins / observed-current inventory. Phase 3j complete for implementation planning, or assessment-only observed evidence recorded. |
 | `reviewed`  | `03-Architect`    | Rev 2 written with architect-derived entries                                                           |
 | `locked`    | `05-IaC Planner`  | Rev 3 reconciled with governance findings                                                              |
 | `deploying` | `07b`/`07t`       | Pre-flight quota/region check started                                                                  |
@@ -92,10 +130,15 @@ checkpoints — **not** a free-form changelog.
 ## Mandatory Elicitation at Step 1
 
 `02-Requirements` MUST elicit SKU and sizing preferences from the user
-for every project, regardless of complexity, workload pattern, or whether
-the user has any pins. The elicitation is the Phase 3j batched
-`askQuestions` call defined in
-[`service-class-menu.md` § 3j](../skills/azure-defaults/references/service-class-menu.md#3j-sku-and-sizing-preferences-mandatory-for-every-project).
+for implementation-planning projects, regardless of complexity, workload pattern, or whether
+the user has any pins. Existing-workload Assessment scenarios skip future SKU/commitment elicitation:
+the manifest records evidence-backed current SKUs as `observed-current`, and the Architect assesses or
+recommends without converting silence into a preference. An empty `services[]` is valid for an assessment
+when no creative SKU is observed or in scope; no `sku_preferences_captured` flag is required for that path.
+Explicit preferences or "no preference" supplied in the brief satisfy
+their applicable classes; never reconfirm them or infer unanswered preferences.
+Ask only for missing/conflicting classes via the Phase 3j batched `ask_user` call defined in
+[`service-class-menu.md` § 3j](../skills/apex-azure-defaults/references/service-class-menu.md#3j-sku-and-sizing-preferences-mandatory-for-every-project).
 
 Outcomes:
 
@@ -110,16 +153,20 @@ Outcomes:
   `apex-recall decide`. This flag distinguishes "user opted out of every
   pin" (valid) from "agent skipped the elicitation" (validator-blocked).
 
-An empty `services[]` at rev 1 is valid **only** when
-`decisions.sku_preferences_captured = true` is set. The validator may be
+For implementation planning, an empty `services[]` at rev 1 is valid **only** when
+`decisions.sku_preferences_captured = true` is set. Assessment-only observed manifests do not require this
+preference flag. The validator may be
 tightened to enforce this; until then, missing flags trigger a WARN.
 
 ## Block-with-Escalation Pattern (Step 6)
 
-When a pre-flight quota or region SKU check fails:
+When a pre-flight quota or SKU availability check fails (`RESTRICTED`,
+`NOT_OFFERED` or insufficient quota, per the
+[SKU availability](../skills/apex-azure-quotas/references/sku-availability.md)
+status contract):
 
-1. Surface to human via the orchestrator. Include available substitutes
-   from `azure-quotas` skill.
+1. Surface to human via the orchestrator. Include only substitutes that are
+   `AVAILABLE` with sufficient quota, from the `apex-azure-quotas` skill.
 2. Human responds with one of four `sku_conflict_resolution` enum
    values:
    - `revert_to_plan` — restart deploy with original SKU after quota fix
@@ -158,102 +205,25 @@ only fields that differ from the base entry. Common patterns:
   `commitment` to a reserved instance.
 
 The `environments[]` top-level set is the allowlist. Override keys
-outside this set are a validator error.
+outside this set are a validator error. Optional `stamps[]` (per-tenant or per-region
+overlays) follow the multi-stamp rules in the tooling reference.
 
-## Coverage Rules
+## Derived Fields and Coverage
 
-`validate:sku-iac-coverage` checks both directions:
-
-- **Manifest → IaC**: every `services[].iac_logical_names.{bicep|terraform}`
-  must appear in `infra/{bicep|terraform}/{project}/` source.
-- **IaC → manifest**: every effective SKU (explicit literals **plus**
-  AVM module defaults when the consumer doesn't pass a SKU param) must
-  trace back to a manifest entry — unless the surrounding resource
-  matches the exclude list above.
-
-AVM-default resolution is wired through
-[`tools/scripts/_lib/avm-default-skus.mjs`](../../tools/scripts/_lib/avm-default-skus.mjs).
-Add a row to that table when a new AVM module ships with a default SKU.
-
-## Rollout
-
-Both validators are **hard-fail**. There is no warn-only window.
-
-Legacy projects that predate the manifest may opt out by placing a
-`.sku-manifest.skip` sentinel file in their `agent-output/{project}/`
-directory; the coverage validator will then skip-with-info instead of
-erroring. Remove the sentinel once the project has a real manifest.
-
-## Governance Allowlist Projection
-
-`04g-Governance` derives a normalized SKU allowlist projection from
-`04-governance-constraints.json` after Phase 2 by invoking
-`node tools/scripts/derive-sku-allowlist.mjs <project>`. The script
-walks `findings[]` for `effect: "deny"` entries whose
-`azurePropertyPath` ends in `.sku.name` / `.skuName` / `.sku_name` /
-`.vmSize`, maps `resource_types[]` to canonical service names, and
-writes the projection into the manifest's `sku_allowlist_snapshot`
-(allowed_skus + denied_skus, pattern-matched with `*`/`?` globs).
-
-`validate:sku-manifest` cross-checks every `services[].size` against
-the projection. The derive script is idempotent — re-running it on
-unchanged input is a no-op.
-
-## Pricing Freshness + Manifest Staleness
-
-`validate:sku-manifest` emits WARN when:
-
-- `services[].cost_estimated_at` is older than `APEX_SKU_PRICING_TTL_DAYS`
-  (default 30 days). `cost-estimate-subagent` writes both
-  `cost_estimate_monthly_usd` and `cost_estimated_at` atomically via
-  Mode B writeback, so this warning indicates pricing should be
-  refreshed.
-- The manifest's top-level `updated_at` is older than
-  `APEX_SKU_MANIFEST_TTL_DAYS` (default 90 days).
-
-These thresholds are env-tunable for projects with different cadence.
-
-## Multi-Stamp Manifests
-
-Optional `stamps[]` field at the manifest top level represents
-independent deployments of the same workload (per-tenant, per-region
-overlays). Each stamp has:
-
-- `id` (unique within `stamps[]`)
-- `regions[]` (may differ from `default_region`)
-- optional `environments[]` (subset of top-level `environments[]`)
-- optional `service_overrides` (map of `services[].id` → sparse
-  `envOverride` shape, applied on top of base entry + env override)
-
-The validator checks `id` uniqueness, environment subset, and that
-`service_overrides` keys reference real `services[].id` entries. When
-`stamps[]` is absent the manifest behaves as a single-stamp project.
+- `sku_allowlist_snapshot` is written by `node tools/scripts/derive-sku-allowlist.mjs <project>`
+  (run by `04g-Governance`); never hand-edit it. `services[].size` must satisfy it.
+- Pricing fields (`cost_estimate_monthly_usd`, `cost_estimated_at`) are written by
+  `cost-estimate-subagent`; stale pricing or manifests produce validator warnings.
+- `validate:sku-iac-coverage` is hard-fail in both directions (manifest ↔ IaC, including
+  AVM default SKUs); only the exclude list above is exempt.
 
 ## MD ↔ JSON Sync
 
-The companion `sku-manifest.md` is a **deterministic rendering** of
-`sku-manifest.json`, produced by
-[`tools/scripts/render-sku-manifest-md.mjs`](../../tools/scripts/render-sku-manifest-md.mjs).
-
-**Rules**:
-
-- Agents write **JSON only**. The renderer is the only legitimate writer
-  of `sku-manifest.md`. Hand-editing the MD is forbidden and will be
-  overwritten on the next commit (lefthook pre-commit auto-stages the
-  re-rendered MD).
-- After any rev-N JSON mutation (Architect at Step 2, Planner at Step 4,
-  Deploy at Step 6, As-Built at Step 7), the author MUST run
-  `node tools/scripts/render-sku-manifest-md.mjs <project>` and stage
-  the MD change in the same commit.
-- The renderer is idempotent: running it twice on the same JSON yields
-  byte-equal output.
-- `validate:sku-manifest` hard-fails when MD is missing, its "Current
-  revision" Overview cell is absent, or that cell does not equal the
-  JSON's `current_revision`. Re-render to fix.
-
-CI enforcement: a `.github/workflows/*` job runs the renderer and
-`git diff --exit-code` on `**/sku-manifest.md` — the PR fails if MD
-drifted out of sync with JSON.
+Agents write **JSON only**; `sku-manifest.md` is a deterministic rendering by
+`tools/scripts/render-sku-manifest-md.mjs` and hand edits are overwritten. After any rev-N
+JSON mutation (Architect at Step 2, Planner at Step 4, Deploy at Step 6, As-Built at Step 7),
+run `node tools/scripts/render-sku-manifest-md.mjs <project>` and stage the MD in the same
+commit. Pre-commit, validator and CI sync checks are described in the tooling reference.
 
 ## Anti-Patterns
 
@@ -265,5 +235,5 @@ drifted out of sync with JSON.
 | Use dynamic keys like `sku_overrides.app_plan_web`   | Use the array form `sku_overrides[]`                |
 | Re-derive SKUs from plan prose in CodeGen agents     | Read `sku-manifest.json` programmatically           |
 | Edit `revisions[]` to "fix" history                  | Append a new revision documenting the correction    |
-| Skip the coverage validator on a legacy project      | Drop a `.sku-manifest.skip` sentinel until migrated |
+| Skip the coverage validator on a legacy project      | Drop a `.sku-manifest.skip` sentinel with a short reason until migrated |
 | Hand-edit `sku_allowlist_snapshot`                   | Re-run `derive-sku-allowlist.mjs`                   |

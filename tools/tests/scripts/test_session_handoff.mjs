@@ -1,0 +1,97 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { renderHandoff, writeHandoff } from "../../scripts/render-session-handoff.mjs";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { ARTIFACT_HEADINGS } from "../../scripts/_lib/artifact-headings.mjs";
+
+const view = () => ({
+  project: "synthetic",
+  session: {
+    steps: { 4: { status: "complete" }, 5: { status: "pending" } },
+    decisions: { iac_tool: "Bicep" },
+    open_findings: [],
+    review_selections: {},
+    effective_reviews: {},
+  },
+  artifacts: [],
+});
+const options = { owner: "06b-Bicep CodeGen", operation: "code-generation only" };
+
+test("handoff refuses dangling symlinks and competing writers", (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "handoff-write-"));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const destination = path.join(directory, "handoff.md");
+  const outside = path.join(directory, "unexpected.md");
+  fs.symlinkSync(outside, destination);
+  assert.throws(() => writeHandoff(destination, "new\n"), /symlink/);
+  assert.ok(!fs.existsSync(outside));
+  fs.unlinkSync(destination);
+  fs.writeFileSync(`${destination}.write-lock`, "other writer");
+  assert.throws(() => writeHandoff(destination, "new\n"));
+  assert.ok(!fs.existsSync(destination));
+});
+
+test("handoff derives exact headings and preserves operation limits", () => {
+  const text = renderHandoff(view(), options);
+  assert.deepEqual(
+    text.split("\n").filter((line) => line.startsWith("## ")),
+    ARTIFACT_HEADINGS["00-handoff.md"],
+  );
+  assert.ok(text.split("\n").length < 60);
+  assert.match(text, /grants no new approval/);
+  assert.match(text, /Step 5: pending/);
+});
+
+test("handoff shows reopened steps as stale with the reason and the superseded plan", () => {
+  const reopened = view();
+  reopened.session.steps = {
+    2: { status: "in_progress" },
+    "3_5": { status: "stale", stale_because: "Step 2 was reopened" },
+    4: { status: "stale" },
+  };
+  reopened.session.decisions.plan_status = "SUPERSEDED";
+  reopened.session.open_findings = ["plan-devops-access carried"];
+  const text = renderHandoff(reopened, options);
+  assert.match(text, /Step 3_5: stale \(Step 2 was reopened\); redo after its predecessor\./);
+  assert.match(text, /Step 4: stale \(an upstream step was reopened\)/);
+  assert.match(text, /plan_status: SUPERSEDED/);
+  assert.match(text, /plan-devops-access carried/);
+});
+test("handoff refuses evidence failure and overflow instead of dropping blockers", () => {
+  const missingPath = view();
+  missingPath.session.open_findings = ["Operator VPN route missing"];
+  assert.match(renderHandoff(missingPath, options), /Operator VPN route missing/);
+  const invalid = view();
+  invalid.session.effective_reviews[4] = { status: "invalid" };
+  assert.throws(() => renderHandoff(invalid, options), /invalid/);
+  const overflow = view();
+  overflow.session.open_findings = Array.from({ length: 60 }, (_, index) => `must_fix: ${index}`);
+  assert.throws(() => renderHandoff(overflow, options), /exceeds limit/);
+});
+
+test("exception handoff keeps findings visible and cannot grant deployment", () => {
+  const authorized = view();
+  authorized.session.risk_authorizations = { "plan-complete": { schema_version: "risk-selection-v1" } };
+  authorized.session.effective_reviews[4] = {
+    status: "current",
+    gate_status: "exception-authorized",
+    unresolved_findings: [{ id: "abcdef01", owner: "kit owner", residual_impact: "limited lab capability" }],
+  };
+  authorized.session.gate_readiness = {
+    codegen: { status: "exception-authorized", scope: { kind: "kit", environment: "non-production-lab" } },
+    deploy: { status: "blocked", error: "Adopter approval required" },
+  };
+  assert.match(renderHandoff(authorized, options), /Unresolved must_fix abcdef01: risk-accepted, not closed/);
+  assert.throws(() => renderHandoff(authorized, { owner: "07b-Bicep Deploy", operation: "deploy" }), /blocked/);
+  authorized.session.gate_readiness["plan-complete"] = { status: "blocked", error: "historical permission expired" };
+  authorized.session.gate_readiness["deployment-complete"] = {
+    status: "exception-authorized",
+    scope: { kind: "deployment", environment: "non-production-lab" },
+  };
+  assert.match(
+    renderHandoff(authorized, { owner: "08-As-Built", operation: "document actual deployment" }),
+    /deployment-complete: exception-authorized/,
+  );
+});

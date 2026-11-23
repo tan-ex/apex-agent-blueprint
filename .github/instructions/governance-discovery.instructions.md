@@ -12,6 +12,9 @@ committed under `.github/data/governance-policy-baseline.json.gz`.
 **GATE**: This is a mandatory gate. If Azure connectivity fails or policies
 cannot be retrieved during live discovery, STOP and inform the user.
 Do NOT generate governance constraints from assumptions.
+**Single exception**: the user may explicitly choose the shipped `alz-corp-default` baseline as *assumed*
+governance (see `baseline-check.md`). It must be labelled assumed and not tenant-verified in every artifact,
+and the Step 3.5 review stays mandatory.
 Do NOT accept arbitrary static files as governance input — only the approved
 workflow output file (`.github/data/governance-policy-baseline.json.gz`) is valid
 for cached baseline mode.
@@ -27,27 +30,23 @@ Assumed governance constraints cause deployment failures. Example:
 **Management group-inherited policies are invisible to basic queries.**
 Use REST API (not `az policy assignment list`) to capture all inherited policies.
 
-## Discovery Is Delegated to Subagent
+## Discovery Runs Through discover.py
 
-Discovery runs inside an isolated subagent invoked via `#runSubagent`. The
-subagent:
+`04g-Governance` runs the deterministic
+[`discover.py`](../skills/apex-azure-governance-discovery/SKILL.md) (live) or
+`render_cached_governance.py` (approved baseline). The script verifies ARM
+connectivity, queries all effective assignments via REST (including
+MG-inherited), drills into Deny/DeployIfNotExists definitions, classifies
+effects and writes `04-governance-constraints.json`. Do not re-create or
+hand-populate that file.
 
-1. Verifies Azure connectivity via ARM token
-2. Queries ALL policy assignments via REST API (including MG-inherited)
-3. Drills into Deny/DeployIfNotExists definitions to verify actual impact
-4. Classifies effects and returns a structured report
-
-The authoritative output contract is defined in
-[`tools/schemas/governance-constraints.schema.json`](../../tools/schemas/governance-constraints.schema.json).
-
-> **DO NOT** read the subagent's `.agent.md` file into the parent agent's
-> context. Doing so defeats context isolation and causes the parent to execute
-> the subagent's internal script inline instead of delegating. Treat the
-> subagent as opaque — interact with it only via `#runSubagent`.
+The authoritative output contract is
+[`tools/schemas/governance-constraints.schema.json`](../../tools/schemas/governance-constraints.schema.json)
+and the skill's [field reference](../skills/apex-azure-governance-discovery/references/schema.md).
 
 ## Fail-Safe: If Discovery Fails
 
-If the subagent returns PARTIAL or FAILED status:
+If the envelope's `discovery_status` is PARTIAL or FAILED, or the script exits non-zero:
 
 1. **STOP** — Do NOT proceed to implementation planning
 2. Document the failure in the governance constraints file
@@ -57,20 +56,22 @@ If the subagent returns PARTIAL or FAILED status:
 
 ## Deep Reference
 
-For policy effect decision trees, plan adaptation examples, validation
-checklists, anti-patterns, and file format schema, read:
+For misleading policy names, plan adaptation examples, the validation
+checklist, anti-patterns and the mandatory Discovery Source section, read:
 `.github/instructions/references/governance-discovery-reference.md`
 
 ## Downstream Enforcement
 
 Discovered policies do not stop at documentation — they MUST flow through
-to the Code Generator and review subagent:
+to the Code Generator and validation subagents:
 
 1. Code Generators (Phase 1.5) read `04-governance-constraints.json`
    and build a compliance map before writing any code
 2. Review subagents verify every Deny policy constraint is satisfied
-3. Both require `bicepPropertyPath`, `azurePropertyPath`, and
-   `requiredValue` fields in the JSON for programmatic verification
+3. Use `required_value` and applicable property paths for programmatic verification.
+   `azurePropertyPath` and `bicepPropertyPath` are conditional mapping aids, not
+   universally required schema fields; `terraformPropertyPath` is reserved for planning.
+   Missing mappings or values require policy/plan reconciliation, never guessed compliance.
 
 See `.github/instructions/references/iac-policy-compliance.md` for the
 full enforcement mandate.

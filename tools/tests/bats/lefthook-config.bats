@@ -3,6 +3,13 @@
 
 load setup
 
+@test "Git pre-commit and pre-push hooks remain configured" {
+  grep -q '^pre-commit:' "$REPO_ROOT/lefthook.yml"
+  grep -q '^pre-push:' "$REPO_ROOT/lefthook.yml"
+  grep -q 'gitleaks protect --staged' "$REPO_ROOT/lefthook.yml"
+  grep -q 'diff-based-push-check.sh' "$REPO_ROOT/lefthook.yml"
+}
+
 @test "post-commit block contains only the allow-listed stamp-sku-manifest hook" {
   # post-commit hooks are normally rejected to keep the commit path
   # blocking-free. The only sanctioned exception is the
@@ -24,8 +31,11 @@ load setup
   fi
 }
 
-@test "pre-commit parallel is true" {
-  grep -q 'parallel: true' "$REPO_ROOT/lefthook.yml"
+@test "pre-commit hooks remain serialized for index-writing operations" {
+  local block
+  block=$(awk '/^pre-commit:/{inside=1; next} /^[a-z][a-z-]*:/{inside=0} inside' "$REPO_ROOT/lefthook.yml")
+  [[ "$block" == *"parallel: false"* ]]
+  [[ "$block" != *"parallel: true"* ]]
 }
 
 @test "all referenced npm scripts exist in package.json" {

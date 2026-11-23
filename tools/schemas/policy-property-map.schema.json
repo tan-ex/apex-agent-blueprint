@@ -43,6 +43,18 @@
             "type": "string",
             "description": "Definition GUID or built-in/custom identifier."
           },
+          "policy_definition_reference_id": {
+            "type": "string",
+            "description": "Optional initiative member reference ID when an initiative reuses the same policy_id across members."
+          },
+          "assignment_id": {
+            "type": "string",
+            "description": "Optional policy assignment ID for provenance disambiguation."
+          },
+          "target_resource": {
+            "type": "string",
+            "description": "Optional planned logical resource name when a policy is expanded per matching resource."
+          },
           "display_name": { "type": "string" },
           "effect": {
             "type": "string",
@@ -74,6 +86,16 @@
           "rationale": {
             "type": "string",
             "description": "WAF pillar mapping and reason. Optional in light mode; required for Deny-effect entries in full mode."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["satisfied", "pending", "not-applicable", "unsatisfiable"],
+            "description": "Optional plan-side status. Mirrors the Governance Compliance Matrix legend; absent means satisfied."
+          },
+          "not_applicable_reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Required when status is not-applicable: why the targeted resource type is absent from the plan."
           }
         }
       }

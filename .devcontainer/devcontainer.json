@@ -1,33 +1,35 @@
 {
   "name": "APEX",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu26.04",
-
-  "features": {
-    "ghcr.io/devcontainers/features/azure-cli:1": {
-      "installBicep": true,
-      "version": "latest"
-    },
-    "ghcr.io/devcontainers/features/powershell:2": {
-      "version": "latest"
-    },
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.14",
-      "installTools": false
-    },
-    "ghcr.io/devcontainers/features/node:": {
-      "version": "lts",
-      "pnpmVersion": "none"
-    },
-    "ghcr.io/devcontainers/features/github-cli:1": {
-      "version": "latest"
-    },
-    "./features/terraform": {},
-    "ghcr.io/azure/azure-dev/azd:latest": {}
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "args": {
+      "APEX_NPM_REGISTRY_HOST_PATH": "${localEnv:APEX_NPM_REGISTRY_HOST_PATH:registry.npmjs.org/}",
+      "APEX_PIP_INDEX_HOST_PATH": "${localEnv:APEX_PIP_INDEX_HOST_PATH:pypi.org/simple/}"
+    }
   },
 
-  // Lifecycle commands - chain apt operations to avoid lock conflicts
-  // Lifecycle: onCreateCommand runs first (system packages + uv), then postCreateCommand (tools), then postStartCommand (updates)
-  "onCreateCommand": "set -e; sudo rm -f /etc/apt/sources.list.d/yarn.list 2>/dev/null; sudo apt-get update; sudo apt-get install -y graphviz dos2unix bats; sudo install -d -m 0755 -o vscode -g vscode \"$HOME/.cache\" \"$HOME/.local/bin\"; dos2unix .devcontainer/*.sh 2>/dev/null || true; npm install --global npm@12.0.2; curl -LsSf https://astral.sh/uv/install.sh | sh; if ! command -v az >/dev/null 2>&1; then curl -fsSL -o /tmp/install-azure-cli.sh https://aka.ms/InstallAzureCLIDeb; sudo DIST_CODE=noble bash /tmp/install-azure-cli.sh; rm -f /tmp/install-azure-cli.sh; fi",
+  "features": {
+    // Latest stable selections resolved on 2026-10-20; native AMD64 build and manual acceptance remain pending.
+    "./features/azure-cli": {
+      "version": "2.91.0"
+    },
+    "ghcr.io/devcontainers/features/powershell:2": {
+      "version": "7.6.7"
+    },
+    "./features/python": {
+      "version": "3.15.0",
+      "pipVersion": "26.2.1"
+    },
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "26.12.0",
+      "pnpmVersion": "none"
+    }
+  },
+  "overrideFeatureInstallOrder": ["./features/python", "./features/azure-cli"],
+
+  // Native tools and verified standalone CLIs are installed before features run.
+  "onCreateCommand": "az version --output none",
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "postStartCommand": "bash .devcontainer/post-start.sh",
 
@@ -35,29 +37,34 @@
   "containerEnv": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHONUNBUFFERED": "1",
-    "NPM_CONFIG_REGISTRY": "https://packagefeedproxy.microsoft.io/npm/",
+    // Public registries by default; Microsoft maintainers opt in to the CFS proxy (README: Package Sources).
+    "NPM_CONFIG_REGISTRY": "https://${localEnv:APEX_NPM_REGISTRY_HOST_PATH:registry.npmjs.org/}",
     "UV_CACHE_DIR": "/home/vscode/.cache/uv",
-    "PIP_INDEX_URL": "https://packagefeedproxy.microsoft.io/pypi/simple/",
-    "UV_INDEX_URL": "https://packagefeedproxy.microsoft.io/pypi/simple/",
+    "PIP_INDEX_URL": "https://${localEnv:APEX_PIP_INDEX_HOST_PATH:pypi.org/simple/}",
+    "UV_INDEX_URL": "https://${localEnv:APEX_PIP_INDEX_HOST_PATH:pypi.org/simple/}",
+    "APEX_POWERSHELL_REPOSITORY_URL": "${localEnv:APEX_POWERSHELL_REPOSITORY_URL}",
     "TF_PLUGIN_CACHE_DIR": "/home/vscode/.terraform.d/plugin-cache"
   },
 
   "remoteEnv": {
     "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}",
     "AZURE_DEFAULTS_LOCATION": "swedencentral",
-    // Pass GH_TOKEN from host → container. gh CLI uses it automatically, no `gh auth login` needed.
-    // Each user sets this once in VS Code User Settings (Ctrl+,):
-    //   "terminal.integrated.env.linux": { "GH_TOKEN": "ghp_yourTokenHere" }
-    // This is the ONLY supported method — shell exports (.bashrc/.profile) do NOT propagate reliably.
-    // Value is empty string if not set — gh CLI falls back to its normal auth flow.
+    // Forward GH_TOKEN from the host process environment inherited by VS Code.
+    // terminal.integrated.env.* configures terminals, not this localEnv substitution.
+    // If unset, gh can use credentials in its mounted config volume.
     "GH_TOKEN": "${localEnv:GH_TOKEN}"
   },
 
   "customizations": {
     "vscode": {
       // Keep editor extensions limited to core APEX language and GitHub UX.
-      // Azure MCP runs from .vscode/mcp.json rather than an extension pack.
+      // Azure MCP runs from .mcp.json rather than an extension pack.
       "extensions": [
+        "-ms-vscode.vscode-node-azure-pack",
+        "-ms-azuretools.vscode-azure-github-copilot",
+        "-ms-azuretools.vscode-azure-mcp-server",
+        "-ms-windows-ai-studio.windows-ai-studio",
+        "-teamsdevapp.vscode-ai-foundry",
         "GitHub.copilot-chat",
         "ms-python.python",
         "ms-python.vscode-pylance",
@@ -75,28 +82,8 @@
         "chat.useNestedAgentsMdFiles": true,
         "chat.useClaudeMdFile": false,
         "chat.customAgentInSubagent.enabled": true,
-        "chat.agentFilesLocations": {
-          ".github/agents": true,
-          ".github/agents/_subagents": true,
-          "~/.copilot/agents": false,
-          "~/.claude/agents": false
-        },
-        "chat.agentSkillsLocations": {
-          ".github/skills": true,
-          "~/.copilot/skills": false,
-          "~/.claude/skills": false
-        },
-        "chat.instructionsFilesLocations": {
-          ".github/instructions": true,
-          "~/.copilot/instructions": false,
-          "~/.claude/rules": false
-        },
-        "chat.hookFilesLocations": {
-          ".github/hooks/tool-guardian": true,
-          ".github/hooks/subagent-validation": true
-        },
-        "chat.useCustomAgentHooks": true,
         "chat.useAgentSkills": true,
+        "chat.mcp.workspaceRootConfig.enabled": true,
         "github.copilot.chat.agentDebugLog.fileLogging.enabled": true,
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode",
@@ -136,6 +123,7 @@
   // - Azure CLI: Host's ~/.azure (Linux/macOS) or %USERPROFILE%\.azure (Windows)
   // - GitHub CLI: Docker volume (Windows uses keyring, can't be mounted; Linux/macOS use files)
   // - UV cache: Docker volume for Python package cache
+  // - Terraform providers: Docker volume for downloaded provider packages
   "mounts": [
     {
       "source": "${localEnv:USERPROFILE}${localEnv:HOME}/.azure",
@@ -150,6 +138,11 @@
     {
       "source": "devcontainer-uv-cache-${devcontainerId}",
       "target": "/home/vscode/.cache/uv",
+      "type": "volume"
+    },
+    {
+      "source": "devcontainer-tf-cache-${devcontainerId}",
+      "target": "/home/vscode/.terraform.d/plugin-cache",
       "type": "volume"
     }
   ],

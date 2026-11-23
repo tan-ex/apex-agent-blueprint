@@ -32,6 +32,7 @@ import { globSync } from "node:fs";
 import { loadValidator } from "./_lib/ajv-validator.mjs";
 import { Reporter } from "./_lib/reporter.mjs";
 import { readJson, sha256File } from "./_lib/json.mjs";
+import { projectDirFromPath, resolveContractPath, resolveProjectFile } from "./_lib/project-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SCHEMA_PATH = path.join(ROOT, "tools/schemas/policy-property-map.schema.json");
@@ -39,15 +40,27 @@ const SCHEMA_PATH = path.join(ROOT, "tools/schemas/policy-property-map.schema.js
 function checkUniquePolicyIds(data, fileRel, r) {
   const seen = new Set();
   for (const p of data.policies ?? []) {
-    if (seen.has(p.policy_id)) {
+    const key = JSON.stringify([
+      p.policy_id ?? "",
+      p.policy_definition_reference_id ?? "",
+      p.assignment_id ?? "",
+      p.target_resource ?? "",
+      p.target_property?.resource_type ?? "",
+      p.target_property?.property_path ?? "",
+      p.target_property?.expected_value ?? null,
+      p.evidence_required ?? "",
+    ]);
+    if (seen.has(key)) {
       r.error(fileRel, `Duplicate policies[].policy_id: "${p.policy_id}"`);
     }
-    seen.add(p.policy_id);
+    seen.add(key);
   }
 }
 
 function checkDenyCoverage(data, fileRel, r) {
-  const sibling = path.join(path.dirname(path.join(ROOT, fileRel)), "04-governance-constraints.json");
+  const fileDir = path.dirname(path.join(ROOT, fileRel));
+  let sibling = path.join(fileDir, "04-governance-constraints.json");
+  if (!fs.existsSync(sibling)) sibling = resolveContractPath(fileDir, "04-governance-constraints.json");
   if (!fs.existsSync(sibling)) {
     r.info(fileRel, "(no sibling 04-governance-constraints.json — skipping Deny coverage check)");
     return;
@@ -56,28 +69,39 @@ function checkDenyCoverage(data, fileRel, r) {
   try {
     constraints = readJson(sibling);
   } catch (err) {
-    r.warn(fileRel, `cannot parse 04-governance-constraints.json: ${err.message}`);
+    r.error(fileRel, `cannot parse 04-governance-constraints.json: ${err.message}`);
     return;
   }
   // governance-constraints schema places policies under different shapes
   // across versions; tolerate both flat .policies[] and nested forms.
   const denyIds = new Set();
-  const flat = constraints.policies ?? constraints.effective_policies ?? [];
+  const flat = constraints.policies ?? constraints.effective_policies ?? constraints.findings;
+  if (!Array.isArray(flat)) {
+    r.error(fileRel, "Governance source must contain a policies, effective_policies or findings array");
+    return;
+  }
   for (const entry of flat) {
-    const effect = entry.effect ?? entry.policyEffect;
-    const id = entry.policy_id ?? entry.policyDefinitionId ?? entry.id;
-    if (effect === "Deny" && id) denyIds.add(id);
+    const effect = entry?.effect ?? entry?.policyEffect;
+    const id = entry?.policy_id ?? entry?.policyDefinitionId ?? entry?.id;
+    if (typeof effect === "string" && effect.toLowerCase() === "deny") {
+      if (typeof id !== "string" || !id.trim()) r.error(fileRel, "Deny policy has no usable identifier");
+      else denyIds.add(id);
+    }
   }
   if (denyIds.size === 0) {
     r.info(fileRel, "(no Deny-effect policies in 04-governance-constraints.json)");
     return;
   }
-  const mapped = new Set((data.policies ?? []).map((p) => p.policy_id));
+  const mapped = new Set(
+    (data.policies ?? [])
+      .filter((policy) => typeof policy.effect === "string" && policy.effect.toLowerCase() === "deny")
+      .map((policy) => policy.policy_id),
+  );
   for (const id of denyIds) {
     if (!mapped.has(id)) {
       r.error(
         fileRel,
-        `Deny-effect policy "${id}" present in 04-governance-constraints.json is missing from policies[]. L1m MUST cover every Deny policy regardless of governance_depth.`,
+        `Deny-effect policy "${id}" present in 04-governance-constraints.json is missing from policies[] as Deny. L1m MUST cover every Deny policy regardless of governance_depth.`,
       );
     }
   }
@@ -85,7 +109,7 @@ function checkDenyCoverage(data, fileRel, r) {
 
 function checkDenyEnrichment(data, fileRel, r) {
   for (const p of data.policies ?? []) {
-    if (p.effect !== "Deny") continue;
+    if (typeof p.effect !== "string" || p.effect.toLowerCase() !== "deny") continue;
     if (!p.evidence_required) {
       r.error(fileRel, `Deny policy "${p.policy_id}" missing evidence_required (mandatory for Deny entries).`);
     }
@@ -95,10 +119,30 @@ function checkDenyEnrichment(data, fileRel, r) {
   }
 }
 
+function checkPolicyStatus(data, fileRel, r) {
+  for (const p of data.policies ?? []) {
+    if (p.status === "not-applicable" && !p.not_applicable_reason?.trim()) {
+      r.error(fileRel, `Policy "${p.policy_id}" is not-applicable but has no not_applicable_reason.`);
+    }
+    if (p.status !== "not-applicable" && p.not_applicable_reason !== undefined) {
+      r.error(fileRel, `Policy "${p.policy_id}" has not_applicable_reason but status is not not-applicable.`);
+    }
+    if (p.status === "unsatisfiable") {
+      r.error(
+        fileRel,
+        `Policy "${p.policy_id}" is unsatisfiable: no plan shape satisfies it; return to 04g-Governance via Refresh Governance.`,
+      );
+    }
+    if (p.status === "pending") r.warn(fileRel, `Policy "${p.policy_id}" is still pending.`);
+  }
+}
+
 function checkConstraintsRefHash(data, fileRel, r) {
   const ref = data.constraints_ref;
   if (!ref || !ref.sha256) return;
-  const refPath = path.resolve(path.dirname(path.join(ROOT, fileRel)), ref.path);
+  const fileDir = path.dirname(path.join(ROOT, fileRel));
+  let refPath = path.resolve(fileDir, ref.path);
+  if (!fs.existsSync(refPath)) refPath = resolveProjectFile(projectDirFromPath(fileDir), ref.path);
   if (!fs.existsSync(refPath)) {
     // Hard fail — the L0 governance constraints file is the basis for the
     // L1 policy-property-map; if missing the chain is broken.
@@ -118,7 +162,7 @@ function checkConstraintsRefHash(data, fileRel, r) {
 }
 
 function defaultGlobs() {
-  return ["agent-output/*/04-policy-property-map.json"];
+  return ["agent-output/*/04-policy-property-map.json", "agent-output/*/contracts/04-policy-property-map.json"];
 }
 
 function main() {
@@ -126,11 +170,18 @@ function main() {
   r.header();
   const validate = loadValidator(SCHEMA_PATH);
   const args = process.argv.slice(2);
+  if (args.includes("--help")) {
+    console.log(
+      "Usage: validate-policy-property-map.mjs [artifact-path-or-glob ...]\nNo paths: scan project policy maps. Explicit unmatched targets fail.",
+    );
+    return;
+  }
   const patterns = args.length > 0 ? args : defaultGlobs();
 
   let files = [];
   for (const pat of patterns) {
     const matched = globSync(pat, { cwd: ROOT, absolute: true });
+    if (args.length > 0 && matched.length === 0) r.error(pat, "Explicit target matched no files; use an artifact path");
     files = files.concat(matched);
   }
   files = [...new Set(files)];
@@ -138,7 +189,8 @@ function main() {
   if (files.length === 0) {
     r.info("(no 04-policy-property-map.json files found)");
     r.summary();
-    process.exit(0);
+    r.exitOnError("No policy property maps selected");
+    return;
   }
 
   for (const filePath of files) {
@@ -157,11 +209,15 @@ function main() {
       }
       continue;
     }
+    const errorsBefore = r.errors;
     checkUniquePolicyIds(data, fileRel, r);
     checkDenyCoverage(data, fileRel, r);
     checkDenyEnrichment(data, fileRel, r);
+    checkPolicyStatus(data, fileRel, r);
     checkConstraintsRefHash(data, fileRel, r);
-    r.ok(fileRel, `policy-property-map (${data.policies.length} policies, depth=${data.governance_depth})`);
+    if (r.errors === errorsBefore) {
+      r.ok(fileRel, `policy-property-map (${data.policies.length} policies, depth=${data.governance_depth})`);
+    }
   }
 
   r.summary();
